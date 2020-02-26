@@ -44,6 +44,10 @@
 #include <opencv2/opencv.hpp>
 #endif
 
+#if CV_MAJOR_VERSION >= 3
+#include <opencv2/imgproc.hpp>
+#endif
+
 #ifndef __CV_BEGIN__
 #define __CV_BEGIN__ __BEGIN__
 #endif
@@ -83,7 +87,7 @@ extern "C" {
   /// \see CV_CHAINCODE_DOWN_RIGHT
   /// \see CV_CHAINCODE_RIGHT
   /// \see CV_CHAINCODE_UP_RIGHT
-  const char cvChainCodeMoves[8][2] = { { 0, -1},
+  const signed char cvChainCodeMoves[8][2] = { { 0, -1},
                                         { 1, -1},
 					{ 1,  0},
 					{ 1,  1},

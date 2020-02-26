@@ -4,7 +4,7 @@
 int main(int argc, char *argv[]){
   exitFunc = QtShow::exit;
   setSignalHandling();
-  
+
   QtShow app(argc, argv);
   return app.exec();
 }
@@ -18,3 +18,4 @@ void interruptDrawing() {}
 void checkForInterrupt() {}
 bool isInterrupted() {return false;}
 void updatePointModeControls() {}
+void updateViewModeControls() {}

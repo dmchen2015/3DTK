@@ -6,7 +6,7 @@
 
 #include <boost/program_options.hpp>
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 #include "windows.h"
 #endif
 
@@ -22,17 +22,12 @@
 
 #include "slam6d/io_types.h"
 #include "slam6d/point_type.h"
+#include "slam6d/scan_settings.h"
 
 struct WindowDimensions {
   int w, h;
   WindowDimensions() : w(0), h(0) {};
   WindowDimensions(int w, int h) : w(w), h(h) {};
-};
-
-struct Color {
-  float r, g, b;
-  Color() : r(0), g(0), b(0) {};
-  Color(float r, float g, float b) : r(r), g(g), b(b) {};
 };
 
 struct Position {
@@ -47,17 +42,6 @@ struct Quaternion {
   Quaternion(double x, double y, double z, double w) : x(x), y(y), z(z), w(w) {};
 };
 
-enum class ShowColormap : int {
-  solid = 0,
-  grey = 1,
-  hsv = 2,
-  jet = 3,
-  hot = 4,
-  rand = 5,
-  shsv = 6,
-  temp = 7
-};
-
 struct Camera {
   Position position;
   Quaternion rotation;
@@ -69,56 +53,12 @@ struct fog_settings {
   GLfloat density;
 };
 
-template<class T>
-struct range {
-  T min, max;
-};
-
-// The members initialized with {} can not have a sensible default in parse_args
-
-struct color_settings {
-  PointType ptype;
-  int colorval = -1;
-  bool explicit_coloring;
-  ShowColormap colormap;
-  range<float> colormap_values {NAN, NAN};
-  Color bgcolor;
-  int scans_colored;
-};
-
-struct dataset_settings {
-  std::string input_directory;
-  IOType format;
-  bool use_scanserver;
-  range<int> scan_numbers;
-
+struct display_settings {
   Camera camera;
-  double scale;
   int init_with_viewmode;
   int pointsize;
 
   fog_settings fog;
-
-  color_settings coloring;
-
-  range<int> distance_filter;
-  double octree_reduction_voxel;
-  int octree_reduction_randomized_bucket {};
-  int skip_files;
-
-  // TODO make this an std::optional (C++17)
-  int origin_type {};
-  bool origin_type_set {};
-  double sphere_radius;
-
-  bool save_octree;
-  bool load_octree;
-  bool cache_octree;
-
-  std::string objects_file_name {};
-  std::string custom_filter {};
-  std::string trajectory_file_name {};
-  bool identity;
 
   bool draw_points;
   bool draw_cameras;
@@ -127,6 +67,9 @@ struct dataset_settings {
 
   bool color_animation;
   bool anim_convert_jpg;
+
+  bool hide_label;
+  bool hide_classLabels;
 };
 
 struct window_settings {
@@ -136,6 +79,7 @@ struct window_settings {
   bool advanced_controls;
   bool invert_mouse_x, invert_mouse_y;
   bool take_screenshot;
+  std::string screenshot_filename;
   bool capture_mouse;
   bool hide_widgets;
 };
@@ -158,7 +102,7 @@ std::string getConfigHome();
  * @param directory_present if this pointer is not null, allow input-dir to not be present and write that presence in the target bool
  * @return the parsed options
  */
-void parse_args(int argc, char **argv, dataset_settings& ds, window_settings& ws, bool *directory_present = nullptr);
+void parse_args(int argc, char **argv, dataset_settings& dss, window_settings& ws, display_settings& ds, bool *directory_present = nullptr);
 void setGUIOptions(bool& nogui, float& fps,
 		   WindowDimensions& dimensions, bool& advanced,
 		   bool& invertMouseX, bool& invertMouseY,
@@ -168,21 +112,21 @@ void setDisplayOptions(double& scale, GLfloat& fov, int& viewmode,
 		       bool& noPoints, bool& noCameras, bool& noPath, bool& noPoses,
 		       bool& noFog, int& fogType, GLfloat& fogDensity,
 		       Position& position, Quaternion& rotation,
-		       int& pointsize, boost::program_options::options_description& display_options);
+		       int& pointsize, bool& hide_classLabels, boost::program_options::options_description& display_options);
 void setColorOptions(Color& bgcolor, bool& color, ShowColormap& colormap,
 		     float& colormin, float& colormax,
 		     int& scansColored, bool& noAnimColor,
 		     boost::program_options::options_description& color_options);
 void setScanOptions(bool& scanserver, int& start, int& end,
 		    IOType& format, boost::program_options::options_description& scan_options);
-void setReductionOptions(int& distMin, int& distMax, double& reduce,
+void setReductionOptions(double& distMin, double& distMax, double& reduce,
 			 int& octree, int& stepsize,
 			 boost::program_options::options_description& reduction_options);
 void setPointOptions(int& originType, double& sphereRadius, boost::program_options::options_description& point_options);
 void setFileOptions(bool& saveOct, bool& loadOct, bool& autoOct, boost::program_options::options_description& file_options);
-void setOtherOptions(bool& screenshot, std::string& objFileName,
+void setOtherOptions(bool& screenshot, std::string& screenshot_filename, std::string& objFileName,
 		     std::string& customFilter,	bool& noAnimConvertJPG,
-		     std::string& trajectoryFileName, bool& identity,
+		     std::string& trajectoryFileName, bool& identity, bool& no_config,
 		     boost::program_options::options_description& other_options);
 
 #endif

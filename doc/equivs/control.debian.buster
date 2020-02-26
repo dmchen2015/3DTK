@@ -10,6 +10,7 @@ Standards-Version: 3.9.2
 Package: 3dtk-build-deps
 Depends:
  build-essential,
+ catkin,
  cmake,
  cmake-curses-gui,
  freeglut3-dev,
@@ -29,6 +30,7 @@ Depends:
  libeigen3-dev,
  libftgl-dev,
  libgl1-mesa-dev,
+ libgl1-mesa-dri,
  libglfw3-dev,
  libkdl-parser-dev,
  liblaser-geometry-dev,
@@ -59,4 +61,6 @@ Depends:
  ros-std-msgs,
  ros-std-srvs,
  wx3.0-headers,
+ xauth,
+ xvfb,
  zlib1g-dev,

@@ -31,7 +31,7 @@
 #include <normals/normals_panorama.h>
 #endif
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp
 #include <direct.h>
@@ -228,8 +228,8 @@ void writeScanFilesXYZ(string dir,
     normptsout << points[i].x << " "
                << points[i].y << " "
                << points[i].z << " "
-               << normals[i].x << " " 
-               << normals[i].y << " " 
+               << normals[i].x << " "
+               << normals[i].y << " "
                << normals[i].z << " " << endl;
   }
   normptsout.clear();
@@ -350,19 +350,19 @@ int main(int argc, char** argv)
     if (inward) {
       flipNormals(normals);
     }
-    
+
     // pose file (repeated for the number of segments
     writePoseFiles(normdir, rPos, rPosTheta, scanNumber);
     // scan files for all segments
     writeScanFiles(normdir, points,normals,scanNumber);
-    writeScanFilesXYZ(normdir, points,normals,scanNumber);
+    //    writeScanFilesXYZ(normdir, points, normals, scanNumber);
 
     scanNumber++;
   }
 
   cout << "Normal program end" << endl;
 
-  return 0;  
+  return 0;
 
   // shutdown everything
   if (scanserver)

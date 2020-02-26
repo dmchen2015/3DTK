@@ -1,9 +1,5 @@
-cmake_minimum_required (VERSION 2.8.2)
+cmake_minimum_required (VERSION 3.5)
 project (3DTK)
-if(POLICY CMP0025)
-  #necessary to build with custom clang on macOS
-  cmake_policy(SET CMP0025 NEW)
-endif()
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/3rdparty/CMakeModules" ${CMAKE_MODULE_PATH})
 
 # cmake no longer defines WIN32 on cygwin
@@ -64,6 +60,11 @@ if(WIN32)
   add_definitions(-DBOOST_ALL_DYN_LINK)
 endif()
 
+if(MINGW)
+  # https://github.com/msys2/MINGW-packages/issues/5233
+  set(Boost_NO_BOOST_CMAKE ON)
+endif()
+
 set(Boost_ADDITIONAL_VERSIONS "1.42" "1.42.0" "1.44" "1.44.0" "1.45.0" "1.45" "1.46" "1.46.1" "1.47.0" "1.47" "1.48" "1.50" "1.52" "1.53" "1.55" "1.56")
 if(WIN32)
   # for some unknown reason no one variant works on all windows platforms
@@ -73,34 +74,24 @@ else()
   find_package( Boost COMPONENTS serialization graph regex filesystem system thread date_time program_options system REQUIRED)
 endif()
 
-if(Boost_FOUND)
-  link_directories(${BOOST_LIBRARY_DIRS})
-  include_directories(${Boost_INCLUDE_DIRS})
-  add_definitions(${Boost_LIB_DIAGNOSTIC_DEFINITIONS})
-endif()
+link_directories(${BOOST_LIBRARY_DIRS})
+include_directories(${Boost_INCLUDE_DIRS})
+add_definitions(${Boost_LIB_DIAGNOSTIC_DEFINITIONS})
 
-find_package(CXSparse REQUIRED)
+find_package(SuiteSparse REQUIRED)
 
 find_package(ANN)
-if (ANN_FOUND)
-  set(ANN_LIBRARIES_SHARED ${ANN_LIBRARIES})
-  set(ANN_LIBRARIES_STATIC ${ANN_LIBRARIES})
-else()
+if (NOT ANN_FOUND)
   add_subdirectory("3rdparty/ann")
   set(ANN_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/3rdparty/ann/ann_1.1.1_modified/include")
-  set(ANN_LIBRARIES_SHARED ann_shared)
-  set(ANN_LIBRARIES_STATIC ann_static)
+  set(ANN_LIBRARIES ann)
 endif()
 
 find_package(Newmat)
-if(NEWMAT_FOUND)
-  set(NEWMAT_LIBRARIES_SHARED ${NEWMAT_LIBRARIES})
-  set(NEWMAT_LIBRARIES_STATIC ${NEWMAT_LIBRARIES})
-else()
+if(NOT NEWMAT_FOUND)
   add_subdirectory("3rdparty/newmat")
   set(NEWMAT_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/3rdparty/newmat/newmat-10")
-  set(NEWMAT_LIBRARIES_SHARED newmat_shared)
-  set(NEWMAT_LIBRARIES_STATIC newmat_static)
+  set(NEWMAT_LIBRARIES newmat)
 endif()
 
 if(APPLE)
@@ -130,17 +121,8 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ADDITIONAL_OPENCV_FLAGS}")
 # Declare Options and modify build accordingly ##
 #################################################
 
-# cvblob is needed for thermo
-find_package(OpenCV QUIET)
-if (OpenCV_FOUND)
-  include_directories(${OpenCV_INCLUDE_DIRS})
-  add_subdirectory(3rdparty/cvblob)
-  link_directories(${PROJECT_SOURCE_DIR}/3rdparty/cvblob)
-else()
-  message(STATUS "Not building cvblob because WITH_OPENCV is OFF")
-endif()
-
 option(WITH_CGAL "Compile with CGAL support" ON)
+option(WITH_GMP "Compile with GMP support" ON) # on Windows GMP is provided by MPIR
 option(WITH_LIBZIP "Compile with libzip support" ON)
 option(WITH_OPENGL "Compile with OpenGL support" ON)
 option(WITH_OPENCV "Compile with OpenCV support" ON)
@@ -157,7 +139,18 @@ option(WITH_OPENCV_NONFREE "Whether to use non-free (patent encumbered) OpenCV f
 option(WITH_COMPACT_OCTREE "Whether to use the compact octree display ON/OFF" OFF)
 option(WITH_GLEE "Whether to use OpenGL extensions, requires glee. ON/OFF" OFF)
 option(WITH_LASLIB "Whether to build LASlib based scanio library" ON)
-option(WITH_MESH "Whether to build mesh module that contains surface reconstruction" ON)
+option(WITH_E57 "Build library for e57 file format support." OFF)
+
+# cvblob is needed for thermo
+if (WITH_OPENCV)
+  find_package(OpenCV REQUIRED)
+  if (OpenCV_VERSION VERSION_LESS 4)
+  message(STATUS "building cvblob")
+  include_directories(${OpenCV_INCLUDE_DIRS})
+  add_subdirectory(3rdparty/cvblob)
+  link_directories(${PROJECT_SOURCE_DIR}/3rdparty/cvblob)
+  endif()
+endif()
 
 ## CUDA accelerated collision detection
 option(WITH_CUDA "Whether to build CUDA accelerated collision detection tools" OFF)
@@ -215,6 +208,26 @@ else()
   message(STATUS "Do NOT compile a scan IO for RXP")
 endif()
 
+## Micro-Epsilon libraries
+option(WITH_MICROEPSILONLIB "Whether the Micro-Epsilon libraries are present ON/OFF" OFF)
+
+if(WITH_MICROEPSILONLIB)
+  message(STATUS "Setting variables for Micro-Epsilon libraries")
+  set(MICROEPSILON_PATH ${PROJECT_SOURCE_DIR}/3rdparty/microepsilon/)
+
+  if (EXISTS "${MICROEPSILON_PATH}/libllt.so.0")
+    if (EXISTS "${MICROEPSILON_PATH}/libmescan.so.0")
+      set(MICROEPSILON_LIBRARY ${MICROEPSILON_PATH}libllt.so.0 ${MICROEPSILON_PATH}libmescan.so.0)
+    else()
+      message(STATUS "Cannot find Micro-Epsilon libraries. Provide libraries or disable WITH_MICROEPSILONLIB.")
+    endif()
+  else()
+    message(STATUS "Cannot find Micro-Epsilon libraries. Provide libraries or disable WITH_MICROEPSILONLIB.")
+  endif()
+else()
+  message(STATUS "Microepsilon libraries not present.")
+endif()
+
 option(WITH_OPENMP "Whether to use parallel processing capabilities of OPENMP. ON/OFF" ON)
 if (WITH_OPENMP)
   find_package(OpenMP REQUIRED)
@@ -253,7 +266,7 @@ else()
 endif()
 
 # OPENMP_NUM_THREADS
-if(OPENMP_FOUND AND WITH_OPENMP)
+if(WITH_OPENMP)
   message(STATUS "With OpenMP ")
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DMAX_OPENMP_NUM_THREADS=${NUMBER_OF_CPUS} -DOPENMP_NUM_THREADS=${NUMBER_OF_CPUS} ${OpenMP_CXX_FLAGS} -DOPENMP")
 else()
@@ -266,7 +279,7 @@ if(WIN32)
   include_directories(${PROJECT_SOURCE_DIR}/3rdparty/windows/)
   link_directories(${PROJECT_SOURCE_DIR}/3rdparty/windows)
   link_directories(${BOOST_LIBRARYDIR})
-  add_library(XGetopt STATIC ${PROJECT_SOURCE_DIR}/3rdparty/windows/XGetopt.cpp)
+  add_library(XGetopt ${PROJECT_SOURCE_DIR}/3rdparty/windows/XGetopt.cpp)
   set(CMAKE_STATIC_LIBRARY_SUFFIX "32.lib")
   # to be able to use numeric_limits<int>::max() and friends on windows
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNOMINMAX")
@@ -286,15 +299,39 @@ endif()
 
 if (${CMAKE_CXX_COMPILER_ID} STREQUAL Clang)
   # using Clang
-  set(ADDITIONAL_CFLAGS "-O3 -std=c++0x -msse3 -Wall -Wno-write-strings -Wno-char-subscripts -Wno-unused-result" CACHE STRING "Additional flags given to the compiler (-O3 -Wall -Wno-write-strings)" )
+  set(ADDITIONAL_CFLAGS "-O3 -Wall -Wno-write-strings -Wno-char-subscripts -Wno-unused-result" CACHE STRING "Additional flags given to the compiler (-O3 -Wall -Wno-write-strings)" )
 elseif (${CMAKE_CXX_COMPILER_ID} STREQUAL GNU)
   # using GCC
-  set(ADDITIONAL_CFLAGS "-O3 -std=c++0x -msse3 -Wall -finline-functions -Wno-unused-but-set-variable -Wno-write-strings -Wno-char-subscripts -Wno-unused-result" CACHE STRING "Additional flags given to the compiler (-O3 -Wall -finline-functions -Wno-write-strings)" )
+  set(ADDITIONAL_CFLAGS "-O3 -Wall -finline-functions -Wno-unused-but-set-variable -Wno-write-strings -Wno-char-subscripts -Wno-unused-result" CACHE STRING "Additional flags given to the compiler (-O3 -Wall -finline-functions -Wno-write-strings)" )
 elseif (${CMAKE_CXX_COMPILER_ID} STREQUAL Intel)
   # using Intel C++
 elseif (${CMAKE_CXX_COMPILER_ID} STREQUAL MSVC)
   # using Visual Studio C++
   set(ADDITIONAL_CFLAGS "-O2" CACHE STRING "Additional flags given to the compiler ( -O2)" )
+endif()
+
+# Remove this conditional when CMake >= 3.1.0 is required.
+# Older CMake is used in Debian Jessie (3.0.2) and Ubuntu Trusty (2.8.12.2).
+if(${CMAKE_VERSION} VERSION_LESS "3.1.0")
+	if (${CMAKE_CXX_COMPILER_ID} STREQUAL Clang)
+		# using Clang
+		set(ADDITIONAL_CFLAGS "${ADDITIONAL_CFLAGS} -std=c++0x")
+	elseif (${CMAKE_CXX_COMPILER_ID} STREQUAL GNU)
+		# using GCC
+		set(ADDITIONAL_CFLAGS "${ADDITIONAL_CFLAGS} -std=c++0x")
+	endif()
+else()
+	# Specifying the C++ standard (-std=c++0x, -std=gnu++14, ...) by using
+	# the CMAKE_CXX_FLAGS is not good cmake style (see Daniel Pfeifer in
+	# https://youtu.be/bsXLMQ6WgIk).
+	# By using CMAKE_CXX_STANDARD we also avoid having to implement
+	# compiler specific command line arguments.
+	set(CMAKE_CXX_STANDARD 11)
+	# do not fall back to a previous standard
+	set(CMAKE_CXX_STANDARD_REQUIRED ON)
+	# enable compiler extensions like -std=gnu++11 on gcc
+	# gnu extensions are needed for strdup, ftruncate, fseeko, ftello...
+	set(CMAKE_CXX_EXTENSIONS ON)
 endif()
 
 # Add OpenGL includes for MACOS if needed
@@ -327,6 +364,8 @@ endif()
 # Robot Operating System (ROS) Integration     ##
 #################################################
 
+# Export include directories if 3DTK is built within a catkin workspace.
+# In that case, find_package(catkin) was already run and catkin_FOUND is true.
 if( catkin_FOUND )
   catkin_package(
     INCLUDE_DIRS include addons/include
@@ -338,6 +377,7 @@ endif()
 #################################################
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ADDITIONAL_CFLAGS}")
+set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${ADDITIONAL_CFLAGS}")
 
 if(APPLE)
   set(CMAKE_MACOSX_RPATH 1)
@@ -375,12 +415,7 @@ add_subdirectory(src/ros)
 add_subdirectory(src/tools)
 add_subdirectory(src/gps)
 add_subdirectory(src/curvefusion)
-if(WITH_MESH)
-  message("Build with mesh module")
-  add_subdirectory(src/mesh)
-else()
-  message("Build without mesh module")
-endif()
+add_subdirectory(src/mesh)
 # 3rdparty must come before src/calibration because it sets
 # APRILTAG_INCLUDE_DIRS
 add_subdirectory(3rdparty)

@@ -1,12 +1,9 @@
 #ifndef __COLORMANAGER_H__
 #define __COLORMANAGER_H__
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 #define  _USE_MATH_DEFINES
 #include <windows.h>
-#endif
-#ifdef __CYGWIN__
-#include <windef.h>
 #endif
 #ifdef WITH_OPENGL
 #ifdef __APPLE__
@@ -44,12 +41,12 @@ class ColorMap {
   }
 
   static ColorMap getColorMap(CM map);
-  
+
   /**
    * hue is in [0,360], all others in [0,1]
    */
-  static void convert_hsv_to_rgb(float hue, float s, float v,  
-                                 float &r, float &g, float &b); 
+  static void convert_hsv_to_rgb(float hue, float s, float v,
+                                 float &r, float &g, float &b);
 };
 
 class GreyMap : public ColorMap {
@@ -113,7 +110,7 @@ class TempMap : public ColorMap {
   public:
   virtual void calcColor(float *d, unsigned int i, unsigned int buckets) {
     float t = 1.0 - (float)i/(float)buckets;
-    
+
     if(t <= 1.0/5.0) {
       d[1] = d[2] = 0.0;
       d[0] = t/(1.0/5.0);
@@ -132,10 +129,10 @@ class TempMap : public ColorMap {
     } else if(t == 1.0) {
       d[0] = d[1] = d[2] = 0.80;
     } else {
-      d[0] = 0.0; 
-      d[1] = 0.0; 
+      d[0] = 0.0;
+      d[1] = 0.0;
       d[2] = 1.0 - ((t-(4.0/5.0))/(1.0/5.0));
-    } 
+    }
   }
 };
 
@@ -212,8 +209,8 @@ class DiffMap : public ColorMap {
 
 class ColorManager {
 
-  public: 
-  
+  public:
+
     ColorManager(unsigned int _buckets, unsigned int pointdim, float *_mins, float *_maxs, const float *_color = 0) : buckets(_buckets) {
       if (_color) {
         color[0] = _color[0];
@@ -229,10 +226,10 @@ class ColorManager {
       for (unsigned int i = 0; i <= buckets; i++) {
         colormap[i] = new float[3];
       }
-      
+
       mins = new float[pointdim];
       maxs = new float[pointdim];
-      for (unsigned int i = 0; i < pointdim; i++) { 
+      for (unsigned int i = 0; i < pointdim; i++) {
         mins[i] = _mins[i];
         maxs[i] = _maxs[i];
       }
@@ -254,14 +251,11 @@ class ColorManager {
     virtual void load() {
       glColor3f(color[0], color[1], color[2] );
       glEnable (GL_TEXTURE_1D);
-      if(!defaultTexture) {
-	glGenTextures(1, &defaultTexture);
-      }
-      glBindTexture (GL_TEXTURE_1D, defaultTexture); 
+      glBindTexture (GL_TEXTURE_1D, defaultTexture);
     }
-    
+
     virtual void unload() {
-      glDisable (GL_TEXTURE_1D); 
+      glDisable (GL_TEXTURE_1D);
     }
 
     virtual void setColor(float *val) {
@@ -299,8 +293,11 @@ class ColorManager {
       extent = max - min;
     }
 
+    float** getFloatColormap() {
+      return colormap;
+    }
   protected:
-    
+
 
     void convertToTexture1D() {
       unsigned char *imageData = new unsigned char[(buckets+1) * 3];
@@ -314,6 +311,9 @@ class ColorManager {
       imageData[3*buckets+1] = colormap[buckets][1]*255;
       imageData[3*buckets+2] = colormap[buckets][2]*255;
 
+      if(!defaultTexture) {
+		  glGenTextures(1, &defaultTexture);
+      }
       glBindTexture (GL_TEXTURE_1D, defaultTexture);
       glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
       glTexParameteri (GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP);
@@ -335,16 +335,16 @@ class ColorManager {
 
     unsigned int currentdim;
 
-    /** stores minima and maxima for each point dimension */ 
+    /** stores minima and maxima for each point dimension */
     float *mins;
     float *maxs;
-    /** maps color to value */ 
+    /** maps color to value */
     float **colormap;
 
     float min;
     float max;
 
-    float extent;    
+    float extent;
 
     float color[3];
 
@@ -355,41 +355,41 @@ class CColorManager : public ColorManager {
     CColorManager(unsigned int buckets, unsigned int pointdim, float *mins, float *maxs, unsigned int _colordim) : ColorManager(buckets, pointdim, mins, maxs) {
       colordim = _colordim;
     }
-    
+
     virtual void load() {
       glGetBooleanv(GL_COLOR_LOGIC_OP, &color_state);
       glDisable(GL_COLOR_LOGIC_OP); // this disables inversion of color, but also messes with fog behaviour
       glColor3f(color[0], color[1], color[2] );
-      glEnable (GL_TEXTURE_1D); 
-      glBindTexture (GL_TEXTURE_1D, 0); 
+      glEnable (GL_TEXTURE_1D);
+      glBindTexture (GL_TEXTURE_1D, 0);
     }
-    
+
     virtual void unload() {
-      glDisable (GL_TEXTURE_1D); 
+      glDisable (GL_TEXTURE_1D);
       if (color_state) {
         glEnable(GL_COLOR_LOGIC_OP);
       }
     }
 
-    void setColor(double *val) {  
+    void setColor(double *val) {
       GLubyte color[3];
-      memcpy(color, &val[colordim], 3);      
-      glColor3ubv(color); 
+      memcpy(color, &val[colordim], 3);
+      glColor3ubv(color);
     }
-    void setColor(float *val) {  
+    void setColor(float *val) {
       GLubyte color[3];
-      memcpy(color, &val[colordim], 3);      
-      glColor3ubv(color); 
+      memcpy(color, &val[colordim], 3);
+      glColor3ubv(color);
     }
-    void setColor(short *val) {  
+    void setColor(short *val) {
       GLubyte color[3];
-      memcpy(color, &val[colordim], 3);      
-      glColor3ubv(color); 
+      memcpy(color, &val[colordim], 3);
+      glColor3ubv(color);
     }
     virtual void setColor(signed char *val) {
       GLubyte color[3];
-      memcpy(color, &val[colordim], 3);      
-      glColor3ubv(color); 
+      memcpy(color, &val[colordim], 3);
+      glColor3ubv(color);
     }
 
   private:

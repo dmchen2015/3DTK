@@ -13,7 +13,7 @@ void display() {
     int viewport[4];
     glGetIntegerv(GL_VIEWPORT, viewport);
     reshape(viewport[2], viewport[3]);
-#ifdef _MSC_VER
+#ifdef _WIN32
     Sleep(25);
 #else
     usleep(250000);
@@ -33,7 +33,7 @@ void display() {
 
 void idle(void) {
 
-#ifdef _MSC_VER
+#ifdef _WIN32
   Sleep(1);
 #else
   usleep(1000);
@@ -97,7 +97,7 @@ void idle(void) {
     }
   }
 
-#ifdef _MSC_VER
+#ifdef _WIN32
   // Extra Sleep is NOT necessary!
   //Sleep(300);
   Sleep(anim_delay);
@@ -248,8 +248,8 @@ void quit() {
 }
 
 void mouseMove(int x, int y) {
-  int deltaMouseX = mouseNavX - x,
-      deltaMouseY = mouseNavY - y;
+  double deltaMouseX = x - mouseNavX;
+  double deltaMouseY = mouseNavY - y;
 
   // Save last position
   mouseNavX = x;
@@ -262,7 +262,7 @@ void mouseMove(int x, int y) {
   }
 }
 
-void mouseMoveDelta(int deltaMouseX, int deltaMouseY) {
+void mouseMoveDelta(double deltaMouseX, double deltaMouseY) {
   if (invertMouseX) deltaMouseX = -deltaMouseX;
   if (invertMouseY) deltaMouseY = -deltaMouseY;
 
@@ -274,7 +274,7 @@ void mouseMoveDelta(int deltaMouseX, int deltaMouseY) {
     // moving 10 pixels is equivalent to one key stroke
     deltaMouseX *= movementSpeed / 10.0;
     deltaMouseY *= movementSpeed / 10.0;
-    moveCamera(-deltaMouseX, deltaMouseY, 0, 0, 0, 0);
+    moveCamera(deltaMouseX, deltaMouseY, 0, 0, 0, 0);
   } else if (mouseNavButton == GLUT_MIDDLE_BUTTON) {
     if (showViewMode != 1) {
       deltaMouseY *= -5;
@@ -282,9 +282,9 @@ void mouseMoveDelta(int deltaMouseX, int deltaMouseY) {
     // moving 10 pixels is equivalent to one key stroke
     deltaMouseX *= movementSpeed / 10.0;
     deltaMouseY *= movementSpeed / 10.0;
-    moveCamera(-deltaMouseX, 0, deltaMouseY, 0, 0, 0);
+    moveCamera(deltaMouseX, 0, deltaMouseY, 0, 0, 0);
   } else if (mouseNavButton == GLUT_LEFT_BUTTON) {
-    moveCamera(0, 0, 0, deltaMouseY, -deltaMouseX, 0);
+    moveCamera(0, 0, 0, deltaMouseY, deltaMouseX, 0);
   } else {
     return;
   }

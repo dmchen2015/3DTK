@@ -2,7 +2,7 @@
 
 using namespace std;
 
-int main(int argc, char **argv) 
+int main(int argc, char **argv)
 {
   // parameters for io
   int start, end;
@@ -11,12 +11,14 @@ int main(int argc, char **argv)
   string dir, odir; // directory of input scan and output model
   IOType iotype;
   bool in_color; // input points with color
+  bool in_reflectance; // transform reflectance to grayscale
+  double min_refl, max_refl;
   bool no_normal; // do not output vertices normals
 
   // parameters for transfromation and filtering
   bool join;
   int rand;
-  bool use_pose;  // should we use the pose information instead of the frames?? 
+  bool use_pose;  // should we use the pose information instead of the frames??
   bool rangeFilterActive;
   bool customFilterActive = false;
   std::string customFilter;
@@ -45,16 +47,16 @@ int main(int argc, char **argv)
   vector<vector<float>> colors;
 
   std::string red_string = "";
-  
+
   // parse input arguments
-  parse_options(argc, argv, start, end, 
+  parse_options(argc, argv, start, end,
     scanserver, max_dist, min_dist,
-    dir, odir, iotype, 
-    in_color, no_normal, join, 
-    red, rand, use_pose,
-    octree, rangeFilterActive, customFilterActive, 
+    dir, odir, iotype,
+    in_color, in_reflectance, min_refl, max_refl,
+    no_normal, join, red, rand, use_pose,
+    octree, rangeFilterActive, customFilterActive,
     customFilter, scaleFac, autoRed,
-    k1, k2, ntype, width, height, 
+    k1, k2, ntype, width, height,
     outward, depth, samplesPerNode, trimVal);
 
   if (scanserver) {
@@ -69,7 +71,7 @@ int main(int argc, char **argv)
 
   rangeFilterActive = min_dist > 0 || max_dist > 0;
 
-  // custom filter set? quick check, needs to contain at least one ';' 
+  // custom filter set? quick check, needs to contain at least one ';'
   // (proper chsecking will be done case specific in pointfilter.cc)
   size_t pos = customFilter.find_first_of(";");
   if (pos != std::string::npos) {
@@ -119,12 +121,12 @@ int main(int argc, char **argv)
 
   // calculate appropriate reduction parameters
   if (red < 0 && autoRed) {
-    RedParam rp; 
+    RedParam rp;
     getRedParam(rp);
     red = rp.voxelSize;
     octree = rp.ptsPerVerxel;
   }
-  
+
   unsigned int types = PointType::USE_NONE;
   if(supportsReflectance(iotype)) types |= PointType::USE_REFLECTANCE;
   if(supportsColor(iotype)) types |= PointType::USE_COLOR;
@@ -152,8 +154,8 @@ int main(int argc, char **argv)
   }
 
   // Apply transformation of scans, with frames or with poses
-  readFrames(dir, start, end, -1, use_pose);
-  
+  readFramesAndTransform(dir, start, end, -1, use_pose, red > 0);
+
   // join all scans then call surface reconstrucion
   // ---
   red_string = red > 0 ? " reduced" : "";
@@ -169,6 +171,7 @@ int main(int argc, char **argv)
 
       DataXYZ xyz = scan->get("xyz" + red_string);
       DataRGB rgb = scan->get(red > 0 ? "color reduced" : "rgb");
+      DataReflectance reflectance = scan->get(red > 0 ? "reflectance reduced" : "reflectance");
       // record UOS format data
       for(unsigned int j = 0; j < xyz.size(); j++) {
         pts.push_back(Point(scaleFac * xyz[j][0], scaleFac * xyz[j][1], scaleFac * xyz[j][2]));
@@ -176,14 +179,22 @@ int main(int argc, char **argv)
         if (in_color) {
           c = {(float)rgb[j][0], (float)rgb[j][1], (float)rgb[j][2]};
         }
-        else {
+        else if (in_reflectance) {
+	  float tmp = reflectance[j];
+	  tmp = ((tmp - min_refl) / (max_refl - min_refl)) * 255.0;
+	  if (tmp < 0.0) tmp = 0;
+	  if (tmp > 255.0) tmp = 255.0;
+	  c = {tmp, tmp, tmp};
+	} else {
           c = {255.0, 255.0, 255.0};
         }
         colors.push_back(c);
       }
-      
+
       // calculate normals for current scan, then merge them
-      calcNormals(pts, norms, ntype, k1, k2, width, height, rPos, rPosTheta, scan);
+      //calcNormals(pts, norms, ntype, k1, k2, width, height, rPos, rPosTheta, scan);
+      calculateNormalsAdaptiveKNN(norms, pts, k1, k2, rPos);
+
       if (!outward) {
         flipNormals(norms);
       }
@@ -205,8 +216,8 @@ int main(int argc, char **argv)
     pp.Trim = trimVal;
     pp.UseColor = in_color;
     pp.ExportNormal = !no_normal;
-    poisson.setPoints(vPoints);   vector<vector<float>>().swap(vPoints); 
-    poisson.setNormals(vNormals); vector<vector<float>>().swap(vNormals); 
+    poisson.setPoints(vPoints);   vector<vector<float>>().swap(vPoints);
+    poisson.setNormals(vNormals); vector<vector<float>>().swap(vNormals);
     poisson.setColors(colors);
     poisson.setParams(pp);
     poisson.apply();
@@ -221,8 +232,6 @@ int main(int argc, char **argv)
       Scan* scan = Scan::allScans[i];
 
       const double* rPos = scan->get_rPos();
-      const double* rPosTheta = scan->get_rPosTheta();
-
       // read scan into points
       DataXYZ xyz(scan->get("xyz" + red_string));
       DataRGB rgb = scan->get(red > 0 ? "color reduced" : "rgb");
@@ -243,7 +252,9 @@ int main(int argc, char **argv)
       }
 
       // calculate normals
-      calcNormals(points, normals, ntype, k1, k2, width, height, rPos, rPosTheta, scan);
+      calculateNormalsAdaptiveKNN(normals, points, k1, k2, rPos);
+      //calcNormals(points, normals, ntype, k1, k2, width, height, rPos, rPosTheta, scan);
+
       if (!outward) {
         flipNormals(normals);
       }
@@ -261,14 +272,14 @@ int main(int argc, char **argv)
       pp.Trim = trimVal;
       pp.UseColor = in_color;
       pp.ExportNormal = !no_normal;
-      poisson.setPoints(vPoints);   vector<vector<float>>().swap(vPoints); 
-      poisson.setNormals(vNormals); vector<vector<float>>().swap(vNormals); 
+      poisson.setPoints(vPoints);   vector<vector<float>>().swap(vPoints);
+      poisson.setNormals(vNormals); vector<vector<float>>().swap(vNormals);
       poisson.setColors(colors);
       poisson.setParams(pp);
       poisson.apply();
       poisson.exportMesh((odir + to_string(scanNumber) + ".obj").c_str());
       poisson.exportTrimmedMesh((odir + to_string(scanNumber) + "_trimmed.obj").c_str());
-      cout << "Poisson reconstruction end, model generated at: " +  odir + to_string(scanNumber) + " & _trimmed.obj" << endl;
+      cout << "Poisson reconstruction end, model generated at: " +  odir + to_string(scanNumber) + " & _trimmed.obj !" << endl;
 
       // clear points and normal of previous scan
       points.clear();
@@ -276,7 +287,7 @@ int main(int argc, char **argv)
       scanNumber++;
     }
   }
-  
+
   // shutdown everything
   if (scanserver)
     ClientInterface::destroy();

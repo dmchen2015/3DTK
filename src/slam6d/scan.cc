@@ -10,10 +10,10 @@
 /**
  * @file scan.cc
  * @brief the implementation for all scans (basic/managed)
- * @author Andreas Nuechter. Jacobs University Bremen gGmbH, Germany. 
+ * @author Andreas Nuechter. Jacobs University Bremen gGmbH, Germany.
  * @author Kai Lingemann. Inst. of CS. University of Osnabrueck, Germany.
- * @author Dorit Borrmann. Jacobs University Bremen gGmbH, Germany. 
- * @author Jan Elseberg. Jacobs University Bremen gGmbH, Germany. 
+ * @author Dorit Borrmann. Jacobs University Bremen gGmbH, Germany.
+ * @author Jan Elseberg. Jacobs University Bremen gGmbH, Germany.
  * @author Thomas Escher. Inst. of CS. University of Osnabrueck, Germany.
  */
 
@@ -42,6 +42,7 @@
 #endif
 
 std::vector<Scan*> Scan::allScans;
+unsigned int Scan::maxScanNr = 0;
 bool Scan::scanserver = false;
 bool Scan::continue_processing = false;
 std::string Scan::processing_command;
@@ -66,6 +67,93 @@ void Scan::openDirectory(bool scanserver,
                              , cache
 #endif
                             );
+}
+
+void Scan::openDirectory(dataset_settings& dss
+#ifdef WITH_MMAP_SCAN
+  , boost::filesystem::path cache
+#endif
+ )
+{
+  // custom filter set? quick check, needs to contain at least one ';'
+// (proper checking will be done case specific in pointfilter.cc)
+  size_t pos = dss.custom_filter.find_first_of(";");
+  bool customFilterActive = false;
+  std::string custom_filter = dss.custom_filter;
+  if (pos != std::string::npos) {
+    customFilterActive = true;
+
+    // check if customFilter is specified in file
+    if (dss.custom_filter.find("FILE;") == 0) {
+      std::string selection_file_name = custom_filter.substr(5, custom_filter.length());
+      std::ifstream selectionfile;
+      // open the input file
+      selectionfile.open(selection_file_name, std::ios::in);
+
+      if (!selectionfile.good()) {
+        std::cerr << "Error loading custom filter file " << selection_file_name << "!" << std::endl;
+        std::cerr << "Data will NOT be filtered.!" << std::endl;
+        customFilterActive = false;
+      }
+      else {
+        std::string line;
+        std::string custFilt;
+        while (std::getline(selectionfile, line)) {
+          // allow comment or empty lines
+          if (line.find("#") == 0) continue;
+          if (line.length() < 1) continue;
+          custFilt = custFilt.append(line);
+          custFilt = custFilt.append("/");
+        }
+        if (custFilt.length() > 0) {
+          // last '/'
+          custom_filter = custFilt.substr(0, custFilt.length() - 1);
+        }
+      }
+      selectionfile.close();
+    }
+  }
+  else {
+    // give a warning if custom filter has been inproperly specified
+    if (custom_filter.length() > 0) {
+      std::cerr << "Custom filter: specifying string has not been set properly, data will NOT be filtered." << std::endl;
+    }
+  }
+
+  std::vector<Scan*> valid_scans = Scan::allScans;
+  int scan_nr = Scan::allScans.size();
+
+  if (dss.use_scanserver)
+    ManagedScan::openDirectory(dss.data_source, dss.format, dss.scan_numbers.min, dss.scan_numbers.max);
+  else {
+    BasicScan::openDirectory(dss
+#ifdef WITH_MMAP_SCAN
+      , cache
+#endif
+    );
+  }
+
+  for (; scan_nr < Scan::allScans.size(); ++scan_nr) {
+    Scan* scan = Scan::allScans[scan_nr];
+    scan->setRangeFilter(dss.distance_filter.max, dss.distance_filter.min);
+    if (customFilterActive) scan->setCustomFilter(custom_filter);
+    if (dss.sphere_radius > 0.0) scan->setRangeMutation(dss.sphere_radius);
+    if (dss.octree_reduction_voxel > 0) {
+      // scanserver differentiates between reduced for slam and
+      // reduced for show, can handle both at the same time
+      if (dss.use_scanserver) {
+        if ((scan_nr - 1) % dss.skip_files != 0) delete scan;
+        else {
+          valid_scans.push_back(scan);
+          dynamic_cast<ManagedScan*>(scan)->setShowReductionParameter(dss.octree_reduction_voxel, dss.octree_reduction_randomized_bucket);
+        }
+      }
+      else {
+        scan->setReductionParameter(dss.octree_reduction_voxel, dss.octree_reduction_randomized_bucket);
+      }
+    }
+  }
+  if (dss.use_scanserver && Scan::allScans.size() > valid_scans.size()) Scan::allScans = valid_scans;
 }
 
 void Scan::closeDirectory()
@@ -93,6 +181,9 @@ void Scan::setProcessingCommand(int argc, char** argv)
 
 Scan::Scan()
 {
+  scanNr = maxScanNr;
+  maxScanNr++;
+
   // pose and transformations
   for(size_t i = 0; i < 3; ++i) rPos[i] = 0;
   for(size_t i = 0; i < 3; ++i) rPosTheta[i] = 0;
@@ -202,7 +293,7 @@ void Scan::createSearchTree()
 #endif //WITH_METRICS
 
   createSearchTreePrivate();
-  
+
 #ifdef WITH_METRICS
   ClientMetric::create_tree_time.end(tc);
 #endif //WITH_METRICS
@@ -310,7 +401,7 @@ void Scan::calcNormals()
   DataNormal xyz_normals(create("normal", sizeof(double)*3*xyz.size()));
   if(xyz.size() == 0) throw
       std::runtime_error("Could not calculate reduced points, XYZ data is empty");
-    
+
   std::vector<Point> points;
   points.reserve(xyz.size());
   std::vector<Point> normals;
@@ -328,7 +419,7 @@ void Scan::calcNormals()
   }
   std::cout << "calcNormals done" << std::endl;
 }
-    
+
 /**
  * Computes an octtree of the current scan, then getting the
  * reduced points as the centers of the octree voxels.
@@ -351,31 +442,39 @@ void Scan::calcReducedPoints()
     DataReflectance my_reflectance(get("reflectance"));
     reflectance = my_reflectance;
   }
+  DataType type(DataPointer(0, 0));
+  if (reduction_pointtype.hasType()) {
+    DataType my_type(get("type"));
+    type = my_type;
+  }
   DataRGB rgb(DataPointer(0, 0));
   if (reduction_pointtype.hasColor()) {
     DataRGB my_rgb(get("rgb"));
     rgb = my_rgb;
   }
-  //Return if empty 
+  //Return if empty
   if(xyz.size() < 1) {
     DataXYZ xyz_reduced(create("xyz reduced", sizeof(double)*3*xyz.size()));
     if (reduction_pointtype.hasNormal()) {
-      DataNormal normal_reduced(create("normal reduced", sizeof(double)*3*xyz.size()));      
+      DataNormal normal_reduced(create("normal reduced", sizeof(double)*3*xyz.size()));
     }
     if (reduction_pointtype.hasReflectance()) {
       DataReflectance reflectance_reduced(create("reflectance reduced", sizeof(float)*reflectance.size()));
+    }
+    if (reduction_pointtype.hasType()) {
+      DataType type_reduced(create("type reduced", sizeof(int)*type.size()));
     }
     if (reduction_pointtype.hasColor()) {
       DataRGB rgb_reduced(create("color reduced", sizeof(unsigned char)*3*xyz.size()));
     }
     return;
   }
-  
+
 #ifdef WITH_METRICS
     ClientMetric::scan_load_time.end(t);
     Timer tl = ClientMetric::calc_reduced_points_time.start();
 #endif //WITH_METRICS
-  
+
   if(reduction_voxelSize <= 0.0) {
     // copy the points
     // check if we can create a large enough array. The maximum size_t on 32 bit
@@ -403,6 +502,18 @@ void Scan::calcReducedPoints()
            reflectance_reduced[i] = reflectance[i];
         }
     }
+    if (reduction_pointtype.hasType()) {
+      // check if we can create a large enough array. The maximum size_t on 32 bit
+      // is around 4.2 billion
+      if (sizeof(size_t) == 4 && type.size() > ((size_t)(-1))/sizeof(int)) {
+              throw std::runtime_error("Insufficient size of size_t datatype");
+      }
+      DataType type_reduced(create("type reduced",
+                                        sizeof(int)*type.size()));
+      for(size_t i = 0; i < xyz.size(); ++i) {
+           type_reduced[i] = type[i];
+        }
+    }
     if (reduction_pointtype.hasColor()) {
       // check if we can create a large enough array. The maximum size_t on 32 bit
       // is around 4.2 billion which is too little for scans with more than 1.4
@@ -425,7 +536,7 @@ void Scan::calcReducedPoints()
           throw std::runtime_error("Insufficient size of size_t datatype");
       }
       DataNormal normal_reduced(create("normal reduced",
-                                       sizeof(double)*3*xyz.size()));      
+                                       sizeof(double)*3*xyz.size()));
         for(size_t i = 0; i < xyz.size(); ++i) {
           for(size_t j = 0; j < 3; ++j) {
             normal_reduced[i][j] = xyz_normals[i][j];
@@ -439,14 +550,16 @@ void Scan::calcReducedPoints()
     for (size_t i = 0; i < xyz.size(); ++i) {
       xyz_in[i] = new double[reduction_pointtype.getPointDim()];
       size_t j = 0;
-      for (; j < 3; ++j) 
+      for (; j < 3; ++j)
         xyz_in[i][j] = xyz[i][j];
       if (reduction_pointtype.hasReflectance())
         xyz_in[i][j++] = reflectance[i];
+      if (reduction_pointtype.hasType())
+        xyz_in[i][j++] = type[i];
       if (reduction_pointtype.hasColor())
         memcpy(&xyz_in[i][j++], &rgb[i][0], 3);
       if (reduction_pointtype.hasNormal())
-        for (size_t l = 0; l < 3; ++l) 
+        for (size_t l = 0; l < 3; ++l)
           xyz_in[i][j++] = xyz_normals[i][l];
     }
 
@@ -456,7 +569,7 @@ void Scan::calcReducedPoints()
     BOctTree<double> *oct = new BOctTree<double>(xyz_in,
                                                  xyz.size(),
                                                  reduction_voxelSize,
-                                                 reduction_pointtype);      
+                                                 reduction_pointtype);
 
     std::vector<double*> center;
     center.clear();
@@ -474,7 +587,7 @@ void Scan::calcReducedPoints()
     } else {
         oct->GetOctTreeCenter(center);
     }
-    
+
     // storing it as reduced scan
     // check if we can create a large enough array. The maximum size_t on 32 bit
     // is around 4.2 billion which is too little for scans with more than 179
@@ -485,8 +598,9 @@ void Scan::calcReducedPoints()
     size_t size = center.size();
     DataXYZ xyz_reduced(create("xyz reduced", sizeof(double)*3*size));
     DataReflectance reflectance_reduced(DataPointer(0, 0));
+    DataType type_reduced(DataPointer(0, 0));
     DataRGB rgb_reduced(DataPointer(0, 0));
-    DataNormal normal_reduced(DataPointer(0, 0)); 
+    DataNormal normal_reduced(DataPointer(0, 0));
     if (reduction_pointtype.hasReflectance()) {
       // check if we can create a large enough array. The maximum size_t on 32 bit
       // is around 4.2 billion which is too little for scans with more than 1.07
@@ -498,6 +612,16 @@ void Scan::calcReducedPoints()
                                                     sizeof(float)*size));
       reflectance_reduced = my_reflectance_reduced;
     }
+    if (reduction_pointtype.hasType()) {
+      // check if we can create a large enough array. The maximum size_t on 32 bit
+      // is around 4.2 billion
+      if (sizeof(size_t) == 4 && size > ((size_t)(-1))/sizeof(int)) {
+              throw std::runtime_error("Insufficient size of size_t datatype");
+      }
+      DataType my_type_reduced(create("type reduced",
+                                                    sizeof(int)*size));
+      type_reduced = my_type_reduced;
+    }
     if (reduction_pointtype.hasColor()) {
       // check if we can create a large enough array. The maximum size_t on 32 bit
       // is around 4.2 billion which is too little for scans with more than 1.4
@@ -507,7 +631,7 @@ void Scan::calcReducedPoints()
       }
       DataRGB my_rgb_reduced(create("color reduced",
                                           sizeof(unsigned char)*3*size));
-      rgb_reduced = my_rgb_reduced; 
+      rgb_reduced = my_rgb_reduced;
     }
     if (reduction_pointtype.hasNormal()) {
       // check if we can create a large enough array. The maximum size_t on 32 bit
@@ -518,18 +642,20 @@ void Scan::calcReducedPoints()
       }
       DataNormal my_normal_reduced(create("normal reduced",
                                           sizeof(double)*3*size));
-      normal_reduced = my_normal_reduced; 
+      normal_reduced = my_normal_reduced;
     }
     for(size_t i = 0; i < size; ++i) {
       size_t j = 0;
-      for (; j < 3; ++j) 
+      for (; j < 3; ++j)
         xyz_reduced[i][j] = center[i][j];
       if (reduction_pointtype.hasReflectance())
         reflectance_reduced[i] = center[i][j++];
+      if (reduction_pointtype.hasType())
+        type_reduced[i] = center[i][j++];
       if (reduction_pointtype.hasColor())
         memcpy(&rgb_reduced[i][0], &center[i][j++], 3);
       if (reduction_pointtype.hasNormal())
-        for (size_t l = 0; l < 3; ++l) 
+        for (size_t l = 0; l < 3; ++l)
           normal_reduced[i][l] = center[i][j++];
     }
     delete oct;
@@ -541,7 +667,7 @@ void Scan::calcReducedPoints()
 
 #ifdef WITH_METRICS
     ClientMetric::calc_reduced_points_time.end(tl);
-#endif //WITH_METRICS  
+#endif //WITH_METRICS
 }
 
 
@@ -565,7 +691,7 @@ void Scan::mergeCoordinatesWithRoboterPosition(Scan* prevScan)
   M4inv(prevScan->get_transMatOrg(), tempMat);
   MMult(prevScan->get_transMat(), tempMat, deltaMat);
   // apply delta transformation of the previous scan
-  transform(deltaMat, INVALID); 
+  transform(deltaMat, INVALID);
 }
 
 /**
@@ -652,7 +778,7 @@ void Scan::transformMatrix(const double alignxf[16])
 void Scan::transform(const double alignxf[16], const AlgoType type, int islum)
 {
   MetaScan* meta = dynamic_cast<MetaScan*>(this);
-  
+
   if(meta) {
     for(size_t i = 0; i < meta->size(); ++i) {
       meta->getScan(i)->transform(alignxf, type, -1);
@@ -904,7 +1030,7 @@ void Scan::getPtPairsSimple(std::vector <PtPair> *pairs,
 
   for (size_t i = 0; i < xyz_reduced.size(); i++) {
     // take about 1/rnd-th of the numbers only
-    if (rnd > 1 && rand(rnd) != 0) continue;  
+    if (rnd > 1 && rand(rnd) != 0) continue;
 
     double p[3];
     p[0] = xyz_reduced[i][0];
@@ -1039,11 +1165,12 @@ void Scan::getPtPairsParallel(std::vector <PtPair> *pairs,
       DataXYZ xyz_reduced(meta->getScan(i)->get("xyz reduced"));
       DataNormal normal_reduced(Target->get("normal reduced"));
       size_t max = xyz_reduced.size();
-      size_t step = max / OPENMP_NUM_THREADS;
+      size_t step = ceil(max / (double)OPENMP_NUM_THREADS);
+      size_t endindex = thread_num == (OPENMP_NUM_THREADS - 1) ? max : step * thread_num + step;
       // call ptpairs for each scan and accumulate ptpairs, centroids and sum
       search->getPtPairs(&pairs[thread_num], Source->dalignxf,
                          xyz_reduced, normal_reduced,
-                         step * thread_num, step * thread_num + step,
+                         step * thread_num, endindex,
                          thread_num,
                          rnd, max_dist_match2, sum[thread_num],
                          centroid_m[thread_num], centroid_d[thread_num],
@@ -1052,9 +1179,10 @@ void Scan::getPtPairsParallel(std::vector <PtPair> *pairs,
   } else {
     DataXYZ xyz_reduced(Target->get("xyz reduced"));
     DataNormal normal_reduced(Target->get("normal reduced"));
+    size_t endindex = thread_num == (OPENMP_NUM_THREADS - 1) ?  xyz_reduced.size() : step * thread_num + step;
     search->getPtPairs(&pairs[thread_num], Source->dalignxf,
                        xyz_reduced, normal_reduced,
-                       thread_num * step, thread_num * step + step,
+                       thread_num * step, endindex,
                        thread_num,
                        rnd, max_dist_match2, sum[thread_num],
                        centroid_m[thread_num], centroid_d[thread_num],

@@ -18,33 +18,32 @@
 
 
 
-using namespace cv;
 using namespace AprilTag;
 
 class CalibrationPattern{
-    
+
 private:
     std::vector<AprilTag3f> patternPoints;
-    
+
 public:
-    
+
     /**
      *  Constructor
      */
     CalibrationPattern();
-    
+
     /**
      *  Destructor
      */
     ~CalibrationPattern();
-    
+
     /**
      *  read an XML-file and pars points
      *
      *  @param path <#path description#>
      */
     void readPattern(std::string path, Settings &s);
-    
+
     /**
      *  get the Point map
      *
@@ -53,7 +52,7 @@ public:
     std::vector<AprilTag3f> getPoints();
 
     std::string patternPointsToString();
-    
+
 };
 
 #endif /* defined(__CameraCalibration__CalibrationPattern__) */

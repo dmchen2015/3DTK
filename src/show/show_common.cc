@@ -98,11 +98,6 @@ GLfloat pzoom = 2000.0;
 GLfloat pzoom_old = pzoom;
 
 /**
- * rotate zoom
- */
-GLfloat rzoom = 1000.0;
-
-/**
  * Mode of the fog (exp, exp2, linear)
  */
 GLint fogMode            = GL_EXP;
@@ -137,7 +132,7 @@ int show_poses           = 1;            // Show the coordinate axes of the pose
  */
 int cameraNavMouseMode  = 1;
 
-int mouseNavX, mouseNavY;
+double mouseNavX, mouseNavY;
 int mouseNavButton = -1;
 int mousePresX, mousePresY;
 
@@ -153,17 +148,25 @@ bool keymap[256];
 /**
  * draw scans in different color during animation
  */
-bool coloranim = true;
+int coloranim = 1;
 
 /**
  * hide the gui
  */
 bool nogui = false;
 
+bool hide_label = false;
+
+/**
+ * hide ClassLabels when using point coloring by type
+ */
+bool hide_classLabels = false;
+
 /**
  * take a screenshot and exit
  */
 bool takescreenshot = false;
+std::string screenshot_filename;
 
 /**
  * rendering a png is done in the background. If an animation is rendered,
@@ -217,7 +220,7 @@ int START_Y              = 0;
 int START_WIDTH          = 960;
 int START_HEIGHT         = 540;
 // Current aspect ratio
-GLdouble aspect          = (double)START_WIDTH/(double)START_HEIGHT;  
+GLdouble aspect          = (double)START_WIDTH/(double)START_HEIGHT;
 bool advanced_controls = false;
 bool invertMouseX = false, invertMouseY = false;
 bool anim_convert_jpg  = true;
@@ -240,6 +243,8 @@ double movementSpeed   = 0.1;
 double defaultZoom     = 20.0;
 GLfloat fogDensity     = 0.1;
 double voxelSize       = 0.20;
+GLfloat rzoom          = 100.0;
+
 
 float adaption_rate = 1.0;
 float LevelOfDetail = 0.0001;
@@ -413,7 +418,7 @@ int readFrames(std::string dir, int start, int end, bool readInitial, IOType &ty
   double mirror[16];
   M4identity(mirror);
   mirror[10] = -1.0;
-  
+
   double initialTransform[16];
   if (readInitial) {
     std::cout << "Initial Transform:" << std::endl;
@@ -425,7 +430,7 @@ int readFrames(std::string dir, int start, int end, bool readInitial, IOType &ty
     }
     initial_in >> initialTransform;
     std::cout << initialTransform << std::endl;
-    
+
     // update the mirror to apply the initial frame for all frames
     double tempxf[16];
     MMult(mirror, initialTransform, tempxf);
@@ -441,7 +446,7 @@ int readFrames(std::string dir, int start, int end, bool readInitial, IOType &ty
     Scan::AlgoType algoType;
     std::vector<double*> Matrices;
     std::vector<Scan::AlgoType> algoTypes;
-    
+
     // iterate over frames (stop if none were created) and
     // pull/convert the frames into local containers
     unsigned int frame_count;
@@ -454,7 +459,7 @@ int readFrames(std::string dir, int start, int end, bool readInitial, IOType &ty
     for(unsigned int i = 0; i < frame_count; ++i) {
       (*it)->getFrame(i, transformation, algoType);
       double* transMatOpenGL = new double[16];
-      
+
       // apply mirror to convert (and initial frame if requested)
       // the frame and save in opengl
       MMult(mirror, transformation, transMatOpenGL);
@@ -462,10 +467,10 @@ int readFrames(std::string dir, int start, int end, bool readInitial, IOType &ty
       Matrices.push_back(transMatOpenGL);
       algoTypes.push_back(algoType);
     }
-    
+
     MetaAlgoType.push_back(algoTypes);
     MetaMatrix.push_back(Matrices);
-    
+
     if((type == UOS_MAP || type == UOS_MAP_FRAMES || type == RTS_MAP)
        && it == Scan::allScans.begin()) {
       MetaAlgoType.push_back(algoTypes);
@@ -473,7 +478,7 @@ int readFrames(std::string dir, int start, int end, bool readInitial, IOType &ty
     }
     current_frame = MetaMatrix.back().size() - 1;
   }
-  
+
   if (MetaMatrix.size() == 0) {
     std::cerr << "*****************************************" << std::endl;
     std::cerr << "** ERROR: No .frames could be found!   **" << std::endl;
@@ -552,12 +557,12 @@ void reloadFrames() {
  * but instead to use the _settings structs everywhere exclusively.
  */
 void copy_settings_to_globals(
-  const dataset_settings& ds, const window_settings& ws,
-  std::string &dir, int& start, int& end, int& maxDist, int& minDist,
+  const dataset_settings& dss, const window_settings& ws, const display_settings& ds,
+  std::string &dir, int& start, int& end, double& maxDist, double& minDist,
   double &red, bool &readInitial, unsigned int &octree,
   PointType &ptype, float &fps, std::string &loadObj,
   bool &loadOct, bool &saveOct, bool &autoOct, int &origin, bool &originset,
-  double &scale, IOType &type, bool& scanserver,
+  IOType &type, bool& scanserver,
   double& sphereMode, std::string& customFilter, std::string& trajectoryFile,
   int &stepsize, bool &identity)
 {
@@ -574,7 +579,7 @@ void copy_settings_to_globals(
   captureMouseCursor = ws.capture_mouse;
   hideWidgetsInFullscreen = ws.hide_widgets;
 
-  scale = ds.scale;
+  scale = dss.scale;
   cangle = ds.camera.fov;
   showViewMode = ds.init_with_viewmode;
   show_points = ds.draw_points;
@@ -585,9 +590,9 @@ void copy_settings_to_globals(
   fogDensity = ds.fog.density;
   pointsize = ds.pointsize;
 
-  bgcolor[0] = ds.coloring.bgcolor.r;
-  bgcolor[1] = ds.coloring.bgcolor.g;
-  bgcolor[2] = ds.coloring.bgcolor.b;
+  bgcolor[0] = dss.coloring.bgcolor.r;
+  bgcolor[1] = dss.coloring.bgcolor.g;
+  bgcolor[2] = dss.coloring.bgcolor.b;
 
   RVX = ds.camera.position.x;
   RVY = ds.camera.position.y;
@@ -598,55 +603,60 @@ void copy_settings_to_globals(
 
   QuatToMouseRot(ds.camera.rotation, mouseRotX, mouseRotY, mouseRotZ);
 
-  ptype = ds.coloring.ptype;
-  listboxColorVal = (ds.coloring.colorval != -1 ? ds.coloring.colorval : 0);
-  listboxColorMapVal = static_cast<int>(ds.coloring.colormap);
-  mincolor_value = ds.coloring.colormap_values.min;
-  maxcolor_value = ds.coloring.colormap_values.max;
-  colorScanVal = ds.coloring.scans_colored;
-  coloranim = ds.color_animation;
+  ptype = dss.coloring.ptype;
+  listboxColorVal = (dss.coloring.colorval != -1 ? dss.coloring.colorval : 0);
+  listboxColorMapVal = static_cast<int>(dss.coloring.colormap);
+  mincolor_value = dss.coloring.colormap_values.min;
+  maxcolor_value = dss.coloring.colormap_values.max;
+  colorScanVal = dss.coloring.scans_colored;
+  coloranim = !ds.color_animation;
 
-  dir = ds.input_directory;
-  scanserver = ds.use_scanserver;
-  start = ds.scan_numbers.min;
-  end = ds.scan_numbers.max;
-  type = ds.format;
+  dir = dss.data_source;
+  scanserver = dss.use_scanserver;
+  start = dss.scan_numbers.min;
+  end = dss.scan_numbers.max;
+  type = dss.format;
 
-  minDist = ds.distance_filter.min;
-  maxDist = ds.distance_filter.max;
-  red = ds.octree_reduction_voxel;
-  octree = ds.octree_reduction_randomized_bucket;
-  stepsize = ds.skip_files;
+  minDist = dss.distance_filter.min;
+  maxDist = dss.distance_filter.max;
+  red = dss.octree_reduction_voxel;
+  octree = dss.octree_reduction_randomized_bucket;
+  stepsize = dss.skip_files;
 
-  origin = ds.origin_type;
-  originset = ds.origin_type_set;
-  sphereMode = ds.sphere_radius;
+  origin = dss.origin_type;
+  originset = dss.origin_type_set;
+  sphereMode = dss.sphere_radius;
 
-  saveOct = ds.save_octree;
-  loadOct = ds.load_octree;
-  autoOct = ds.cache_octree;
+  saveOct = dss.save_octree;
+  loadOct = dss.load_octree;
+  autoOct = dss.cache_octree;
 
   takescreenshot = ws.take_screenshot;
-  loadObj = ds.objects_file_name;
-  customFilter = ds.custom_filter;
+  screenshot_filename = ws.screenshot_filename;
+  loadObj = dss.objects_file_name;
+  customFilter = dss.custom_filter;
   anim_convert_jpg = ds.anim_convert_jpg;
-  trajectoryFile = ds.trajectory_file_name;
-  identity = ds.identity;
+  trajectoryFile = dss.trajectory_file_name;
+  identity = dss.identity;
+
+  hide_label = ds.hide_label;
+  hide_classLabels = ds.hide_classLabels;
 
   // Start in RGB mode if the user requests it or they request no other coloring
-  if (ds.coloring.explicit_coloring || (ds.coloring.colorval == -1 && ds.coloring.ptype.hasColor())) {
+  if (dss.coloring.explicit_coloring || (dss.coloring.colorval == -1 && dss.coloring.ptype.hasColor())) {
     colorScanVal = 2;
   }
 }
 
-void initShow(const dataset_settings& ds, const window_settings& ws){
+void initShow(dataset_settings& dss, const window_settings& ws, const display_settings &ds){
   std::cout << "(wx)show - A highly efficient 3D point cloud viewer" << std::endl
        << "(c) University of Wuerzburg, Germany, since 2013" << std::endl
        << "    Jacobs University Bremen gGmbH, Germany, 2009 - 2013" << std::endl
        << "    University of Osnabrueck, Germany, 2006 - 2009" << std::endl << std::endl;
 
   double red   = -1.0;
-  int start = 0, end = -1, maxDist = -1, minDist = -1;
+  int start = 0, end = -1;
+  double maxDist = -1, minDist = 0;
   std::string dir;
   bool readInitial = false;
   IOType type  = UOS;
@@ -657,7 +667,6 @@ void initShow(const dataset_settings& ds, const window_settings& ws){
   std::string loadObj;
   int origin = 0;
   bool originset = false;
-  double scale = 0.01; // in m
   bool scanserver = false;
   double sphereMode = 0.0;
   bool customFilterActive = false;
@@ -674,10 +683,10 @@ void initShow(const dataset_settings& ds, const window_settings& ws){
   strncpy(path_file_name, "path.dat", 1024);
   strncpy(selection_file_name, "selected.3d", 1024);
 
-  copy_settings_to_globals(ds, ws, dir, start, end, maxDist, minDist, red,
+  copy_settings_to_globals(dss, ws, ds, dir, start, end, maxDist, minDist, red,
                            readInitial, octree, pointtype, idealfps, loadObj,
                            loadOct, saveOct, autoOct, origin, originset,
-                           scale, type, scanserver, sphereMode, customFilter,
+                           type, scanserver, sphereMode, customFilter,
                            trajectoryFile, stepsize, identity);
 
   // modify all scale dependant variables
@@ -689,6 +698,7 @@ void initShow(const dataset_settings& ds, const window_settings& ws){
   fogDensity      = 0.1 * scale;
   defaultZoom     =  20 / scale;
   voxelSize       = 0.2 / scale;
+  rzoom           = 1.0 / scale;
 
   loading_progress(0, 0, 0);
   loading_status("Loading extra objects");
@@ -712,89 +722,17 @@ void initShow(const dataset_settings& ds, const window_settings& ws){
   // init and create display
   //M4identity(view_rotate_button);
   obj_pos_button[0] = obj_pos_button[1] = obj_pos_button[2] = 0.0;
-  
+
   // Loading scans, reducing, loading frames and generation if neccessary
-  
+
   loading_status("Loading scans");
   // We would have to hook loading_progress into there really uglily
-  Scan::openDirectory(scanserver, dir, type, start, end);
-  
+  Scan::openDirectory(dss);
+
   if (Scan::allScans.size() == 0) {
     std::cerr << "No scans found. Did you use the correct format?" << std::endl;
     exit(-1);
   }
-
-  // custom filter set? quick check, needs to contain at least one ';' 
-  // (proper checking will be done case specific in pointfilter.cc)
-  size_t pos = customFilter.find_first_of(";");
-  if (pos != std::string::npos){
-    customFilterActive = true;
-
-    // check if customFilter is specified in file
-    if (customFilter.find("FILE;") == 0){
-      std::string selection_file_name = customFilter.substr(5, customFilter.length());
-      std::ifstream selectionfile;
-      // open the input file
-      selectionfile.open(selection_file_name, std::ios::in);
-
-      if (!selectionfile.good()){
-        std::cerr << "Error loading custom filter file " << selection_file_name << "!" << std::endl;
-        std::cerr << "Data will NOT be filtered.!" << std::endl;
-        customFilterActive = false;
-      }
-      else {
-        std::string line;
-        std::string custFilt;
-        while (std::getline(selectionfile, line)){
-          // allow comment or empty lines
-          if (line.find("#") == 0) continue;
-          if (line.length() < 1) continue;
-          custFilt = custFilt.append(line);
-          custFilt = custFilt.append("/");
-        }
-        if (custFilt.length() > 0) {
-          // last '/'
-          customFilter = custFilt.substr(0, custFilt.length() - 1);
-        }
-      }
-      selectionfile.close();
-    }
-  }
-  else {
-    // give a warning if custom filter has been inproperly specified
-    if (customFilter.length() > 0){
-      std::cerr << "Custom filter: specifying string has not been set properly, data will NOT be filtered." << std::endl;
-    }
-  }
-  
-  loading_status("Applying filters and reduction");
-  loading_progress(0, 0, Scan::allScans.size());
-  int scanNr = 0;
-  std::vector<Scan*> valid_scans;
-  for (ScanVector::iterator it = Scan::allScans.begin();
-       it != Scan::allScans.end();
-       ++it) {
-    Scan* scan = *it;
-    scan->setRangeFilter(maxDist, minDist);
-    if (customFilterActive) scan->setCustomFilter(customFilter);
-    if (sphereMode > 0.0) scan->setRangeMutation(sphereMode);
-    if (red > 0) {
-      // scanserver differentiates between reduced for slam and
-      // reduced for show, can handle both at the same time
-      if(scanserver) {
-        dynamic_cast<ManagedScan*>(scan)->setShowReductionParameter(red, octree);
-      } else {
-        scan->setReductionParameter(red, octree);
-      }
-    }
-    scanNr++;
-    if ((scanNr-1)%stepsize != 0) delete scan; 
-    else valid_scans.push_back(scan);
-
-    loading_progress(scanNr, 0, Scan::allScans.size());
-  }
-  //Remove scans if some got invalid due to filtering
-  if(Scan::allScans.size() > valid_scans.size()) Scan::allScans = valid_scans;
 
   if (sphereMode > 0.0) {
     cm = new ScanColorManager(4096, pointtype, /* animation_color = */ false);
@@ -813,7 +751,7 @@ void initShow(const dataset_settings& ds, const window_settings& ws){
   if (loadOct)
     std::cout << "Loading octtrees from file where possible instead of creating them from scans."
          << std::endl;
-  
+
   // for managed scans the input phase needs to know how much it can handle
   std::size_t free_mem = 0;
   if(scanserver)
@@ -822,7 +760,7 @@ void initShow(const dataset_settings& ds, const window_settings& ws){
   loading_progress(0, 0, Scan::allScans.size());
   for(unsigned int i = 0; i < Scan::allScans.size(); ++i) {
     Scan* scan = Scan::allScans[i];
-  
+
   // create data structures
 #ifdef USE_COMPACT_TREE // FIXME: change compact tree, then this case can be removed
     compactTree* tree;
@@ -860,7 +798,7 @@ void initShow(const dataset_settings& ds, const window_settings& ws){
     }
 #else // FIXME: remove the case above
     scan->setOcttreeParameter(red, voxelSize, pointtype, loadOct, saveOct, autoOct);
-    
+
     DataOcttree* data_oct;
     try {
       data_oct = new DataOcttree(scan->get("octtree"));
@@ -873,7 +811,7 @@ void initShow(const dataset_settings& ds, const window_settings& ws){
     }
     BOctTree<float>* btree = &(data_oct->get());
     unsigned int tree_size = btree->getMemorySize();
-    
+
     if(scanserver) {
       // check if the octtree would actually fit with all the others
       if(tree_size > free_mem) {
@@ -887,14 +825,14 @@ void initShow(const dataset_settings& ds, const window_settings& ws){
       }
     }
 #endif //FIXME: COMPACT_TREE
-    
+
 #if !defined USE_COMPACT_TREE
     // show structures
     // associate show octtree with the scan and
     // hand over octtree pointer ownership
 
     Show_BOctTree<sfloat>* tree = new Show_BOctTree<sfloat>(scan, data_oct, cm);
-    
+
     // unlock cached octtree to enable creation
     // of more octtres without blocking the space for full scan points
     tree->unlockCachedTree();
@@ -902,7 +840,7 @@ void initShow(const dataset_settings& ds, const window_settings& ws){
 
     // octtrees have been created successfully
     octpts.push_back(tree);
-    
+
     // print something
 #ifdef USE_COMPACT_TREE
     // TODO: change compact tree for memory footprint output, remove this case
@@ -913,7 +851,7 @@ void initShow(const dataset_settings& ds, const window_settings& ws){
     if (tree_size/1024/1024 > 0) {
       std::cout << tree_size/1024/1024 << "M";
       space = true;
-    }      
+    }
     if ((tree_size/1024)%1024 > 0) {
       if (space) std::cout << " ";
       std::cout << (tree_size/1024)%1024 << "K";
@@ -969,13 +907,13 @@ void initShow(const dataset_settings& ds, const window_settings& ws){
     if(stop) octpts.erase(it_remove_first, octpts.end());
     std::cout << ' ' << loaded << " octtrees loaded." << std::endl;
   }
-  
+
 #endif // !COMPACT_TREE
 
   loading_status("Loading frames");
 
   // load frames now that we know how many scans we actually loaded
-  unsigned int real_end = std::min((unsigned int)(end), 
+  unsigned int real_end = std::min((unsigned int)(end),
                               (unsigned int)(start + octpts.size() - 1));
 
   // necessary to save these to allow filtering of scans from view and reloading frames; could also make those global..
@@ -983,14 +921,13 @@ void initShow(const dataset_settings& ds, const window_settings& ws){
   endScanIdx = real_end;
   readIni = readInitial;
   scanIOtype = type;
-  
-  if(readFrames(dir, start, real_end, readInitial, type))
+
+  if(readFrames(dir, start, real_end, readInitial, type) != 0)
     generateFrames(start, real_end, identity /*use .pose or identity*/);
   else std::cout << "Using existing frames..." << std::endl;
 
-  cm->setCurrentType(PointType::USE_HEIGHT);
-  //ColorMap cmap;
-  //cm->setColorMap(cmap);
+  mapColorToValue(0); // uses listboxColorVal
+  changeColorMap(0);  // uses listboxColorMapVal
 
   if (std::isnan(mincolor_value)) {
     mincolor_value = cm->getMin();
@@ -998,7 +935,6 @@ void initShow(const dataset_settings& ds, const window_settings& ws){
   if (std::isnan(maxcolor_value)) {
     maxcolor_value = cm->getMax();
   }
-  minmaxChanged(0);
 
   selected_points = new std::set<sfloat*>[octpts.size()];
 
@@ -1013,7 +949,7 @@ void initShow(const dataset_settings& ds, const window_settings& ws){
   for (unsigned int i = 0; i < 256; i++) {
     keymap[i] = false;
   }
-  setScansColored(colorScanVal);
+  setScansColored(0);
 
   if (trajectoryFile.size() > 0) {
     std::ifstream file(trajectoryFile);
@@ -1059,7 +995,7 @@ void deinitShow()
 	  std::unique_lock<std::mutex> lock(png_workers_mutex);
 	  png_workers_cv.wait(lock, []{return png_workers == 0;});
   }
-  
+
   std::cout << "Cleaning up octtrees and scans." << std::endl;
   if(octpts.size()) {
     // delete octtrees to release the cache locks within
@@ -1069,7 +1005,7 @@ void deinitShow()
       delete *it;
     }
   }
-  
+
   Scan::closeDirectory();
 
   for (double* it : trajectory) {
@@ -1102,6 +1038,7 @@ void signal_interrupt(int v)
 
 void setSignalHandling()
 {
+#ifndef WIN32
   struct sigaction actSigSegv;
   struct sigaction actSigInt;
   sigset_t sigset;
@@ -1122,7 +1059,9 @@ void setSignalHandling()
   actSigInt.sa_mask = sigset;
   sigaction(SIGINT, &actSigInt, NULL);
   sigaction(SIGTERM, &actSigInt, NULL);
+#endif
 }
+
 
 void QuatToMouseRot(Quaternion q, double& x, double& y, double& z)
 {

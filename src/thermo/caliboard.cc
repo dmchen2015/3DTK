@@ -8,7 +8,7 @@
  */
 
 /**
- * @file 
+ * @file
  * @author Dorit Borrmann. Institute of Computer Science, University of Osnabrueck, Germany.
 */
 
@@ -29,7 +29,7 @@ using std::cerr;
 using std::endl;
 #include <errno.h>
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp
 #include <float.h>
@@ -108,7 +108,7 @@ void usage(char* prog) {
 	  << "         trim the scan with upper boundary NR" << endl
 	  << endl
     	  << endl << endl;
-  
+
   cout << bold << "EXAMPLES " << normal << endl
 	  << "   " << prog << " -m 500 -r 5 dat" << endl
 	  << "   " << prog << " --max=5000 -r 10.2 dat" << endl
@@ -119,7 +119,7 @@ void usage(char* prog) {
 
 void writeFalse(string output) {
   ofstream caliout(output.c_str());
-  
+
   caliout << "failed" << endl;
   caliout.close();
   caliout.clear();
@@ -130,13 +130,13 @@ bool matchPlaneToBoard(vector<double *> &points, double *alignxf, int pattern, s
   double rPosTheta[3] = {0.0,0.0,0.0};
 
   vector<double *> boardpoints;
-  double halfwidth; 
-  double halfheight; 
+  double halfwidth;
+  double halfheight;
   double w_step = 0.5;
   double h_step = 0.5;
 
   switch(pattern) {
-    case 0: 
+    case 0:
       halfheight = 28.5;
       halfwidth = 25.0;
       break;
@@ -152,7 +152,7 @@ bool matchPlaneToBoard(vector<double *> &points, double *alignxf, int pattern, s
       break;
     case 4: //Ostia
       /*
-      halfwidth = 14.85; 
+      halfwidth = 14.85;
       halfheight = 21;
       */
       halfwidth = 22.5;
@@ -177,25 +177,25 @@ bool matchPlaneToBoard(vector<double *> &points, double *alignxf, int pattern, s
       boardpoints.push_back(p);
     }
   }
- 
+
   int nr_points = boardpoints.size();
   int nr_points2 = points.size();
   Scan * plane = new BasicScan(rPos, rPosTheta, points);
   Scan * board = new BasicScan(rPos, rPosTheta, boardpoints);
-  
+
   for(unsigned int i = 0; i < boardpoints.size(); i++) {
     delete[] boardpoints[i];
   }
-  
+
   plane->setRangeFilter(-1, -1);
   plane->setReductionParameter(-1, 0);
   plane->setSearchTreeParameter(simpleKD);
   board->setRangeFilter(-1, -1);
   board->setReductionParameter(-1, 0);
   board->setSearchTreeParameter(simpleKD);
-  
+
   board->transform(alignxf, Scan::ICP, 0);
-  
+
   bool quiet = true;
   icp6Dminimizer *my_icp6Dminimizer = 0;
   my_icp6Dminimizer = new icp6D_SVD(quiet);
@@ -206,7 +206,7 @@ bool matchPlaneToBoard(vector<double *> &points, double *alignxf, int pattern, s
   my_icp = new icp6D(my_icp6Dminimizer, mdm, mni, quiet, false, -1, false, 1, 0.00, false, false);
   my_icp->match(plane, board);
   delete my_icp;
-  
+
   mdm = 2;
   mni = 300;
   my_icp = new icp6D(my_icp6Dminimizer, mdm, mni, quiet, false, -1, false, 1, 0.00, false, false);
@@ -214,13 +214,13 @@ bool matchPlaneToBoard(vector<double *> &points, double *alignxf, int pattern, s
   delete my_icp;
   delete my_icp6Dminimizer;
 
-  double sum; 
+  double sum;
   double centroid_s[3] = {0.0, 0.0, 0.0};
   double centroid_t[3] = {0.0, 0.0, 0.0};
   vector<PtPair> pairs_out;
-  Scan::getPtPairs(&pairs_out, plane, board, 1, 0, 3.0, sum, centroid_s, centroid_t);  
+  Scan::getPtPairs(&pairs_out, plane, board, 1, 0, 3.0, sum, centroid_s, centroid_t);
   int nr_matches = pairs_out.size();
-  
+
   cout << "Result " << nr_matches << " " << nr_points << " " << nr_points2 << endl;
   const double * pos = board->get_rPos();
   const double * postheta = board->get_rPosTheta();
@@ -230,7 +230,7 @@ bool matchPlaneToBoard(vector<double *> &points, double *alignxf, int pattern, s
   }
 
   cout << endl << endl;
-  cout << "Transform new: " << endl; 
+  cout << "Transform new: " << endl;
   for(int i = 0; i < 3; i++) {
     cout << pos[i] << " ";
   }
@@ -240,21 +240,21 @@ bool matchPlaneToBoard(vector<double *> &points, double *alignxf, int pattern, s
   }
   cout << endl;
   cout << "Calipoints Start" << endl;
-  
+
   ofstream caliout(output.c_str());
-  
+
   if(nr_matches < nr_points) {
-    caliout << "failed" << endl;
+    caliout << "#failed" << endl;
   } else {
-    caliout << "Calibration" << endl; 
+    caliout << "#Calibration" << endl;
   }
- 
+
   /**
    * write FRAMES
    */
   /*
   string filename = "tmp.frames";
-    
+
   ofstream fout(filename.c_str());
   if (!fout.good()) {
 	 cerr << "ERROR: Cannot open file " << filename << endl;
@@ -308,7 +308,7 @@ bool matchPlaneToBoard(vector<double *> &points, double *alignxf, int pattern, s
       }
     }
     break;
-  // chessboard on wooden board pattern bottom 
+  // chessboard on wooden board pattern bottom
   case 3:
     for(double y = -4.1; y > -33.0; y-=5.2) {
     for(double x = -8.1; x < 10; x+=5.2) {
@@ -370,7 +370,7 @@ bool matchPlaneToBoard(vector<double *> &points, double *alignxf, int pattern, s
     }
     break;
 
-  } 
+  }
   caliout.close();
   caliout.clear();
 
@@ -382,7 +382,7 @@ bool matchPlaneToBoard(vector<double *> &points, double *alignxf, int pattern, s
 
 int parseArgs(int argc, char **argv, string &dir, double &red, int &start, int
 &end, int &pattern, int &maxDist, int &minDist, double &top, double &bottom, int
-&octree, IOType &type, bool &quiet) {
+&octree, IOType &type, string &customFilter, bool &quiet) {
 
   bool reduced = false;
   int  c;
@@ -392,7 +392,7 @@ int parseArgs(int argc, char **argv, string &dir, double &red, int &start, int
   /* options descriptor */
   // 0: no arguments, 1: required argument, 2: optional argument
   static struct option longopts[] = {
-    { "format",          required_argument,   0,  'f' },  
+    { "format",          required_argument,   0,  'f' },
     { "max",             required_argument,   0,  'm' },
     { "min",             required_argument,   0,  'M' },
     { "start",           required_argument,   0,  's' },
@@ -403,11 +403,12 @@ int parseArgs(int argc, char **argv, string &dir, double &red, int &start, int
     { "end",             required_argument,   0,  'e' },
     { "top",             required_argument,   0,  't' },
     { "bottom",          required_argument,   0,  'b' },
+    { "customFilter",    required_argument,   0,  'u' },
     { 0,           0,   0,   0}                    // needed, cf. getopt.h
   };
 
   cout << endl;
-  while ((c = getopt_long(argc, argv, "f:r:s:e:m:M:O:qp:e:t:b:", longopts, NULL)) != -1) 
+  while ((c = getopt_long(argc, argv, "f:r:s:e:m:M:O:qp:e:t:b:", longopts, NULL)) != -1)
   switch (c)
 	 {
 	 case 'r':
@@ -457,6 +458,9 @@ int parseArgs(int argc, char **argv, string &dir, double &red, int &start, int
 	 case 'M':
 	   minDist = atoi(optarg);
 	   break;
+   case 'u':
+     customFilter = argv[optind];
+     break;
    case '?':
 	   usage(argv[0]);
 	   return 1;
@@ -485,7 +489,7 @@ int parseArgs(int argc, char **argv, string &dir, double &red, int &start, int
  * argument.
  *
  */
-int main(int argc, char **argv) 
+int main(int argc, char **argv)
 {
 
   cout << "(c) Jacobs University Bremen, gGmbH, 2010" << endl << endl;
@@ -507,12 +511,55 @@ int main(int argc, char **argv)
   double bottom = -5;
   double top = 170;
   IOType type    = UOS;
+  string customFilter;
+  bool customFilterActive = false;
 
   cout << "Parse args" << endl;
-  parseArgs(argc, argv, dir, red, start, end, pattern, maxDist, minDist, top, bottom, octree, type, quiet);
+  parseArgs(argc, argv, dir, red, start, end, pattern, maxDist, minDist, top, bottom, octree, type, customFilter, quiet);
   int fileNr = start;
   string calidir = dir + "/cali";
-  
+
+  // custom filter set? quick check, needs to contain at least one ';'
+  // (proper chsecking will be done case specific in pointfilter.cc)
+  size_t pos = customFilter.find_first_of(";");
+  if (pos != std::string::npos){
+      customFilterActive = true;
+
+      // check if customFilter is specified in file
+      if (customFilter.find("FILE;") == 0){
+          std::string selection_file_name = customFilter.substr(5, customFilter.length());
+          std::ifstream selectionfile;
+          // open the input file
+          selectionfile.open(selection_file_name, std::ios::in);
+
+          if (!selectionfile.good()){
+              std::cerr << "Error loading custom filter file " << selection_file_name << "!" << std::endl;
+              std::cerr << "Data will NOT be filtered!" << std::endl;
+              customFilterActive = false;
+          }
+          else {
+              std::string line;
+              std::string custFilt;
+              while (std::getline(selectionfile, line)){
+                  if (line.find("#") == 0) continue;
+                  custFilt = custFilt.append(line);
+                  custFilt = custFilt.append("/");
+              }
+              if (custFilt.length() > 0) {
+                  // last '/'
+                  customFilter = custFilt.substr(0, custFilt.length() - 1);
+              }
+          }
+          selectionfile.close();
+      }
+  }
+  else {
+      // give a warning if custom filter has been inproperly specified
+      if (customFilter.length() > 0){
+          std::cerr << "Custom filter: specifying string has not been set properly, data will NOT be filtered." << std::endl;
+      }
+  }
+
 #ifdef WITH_SCANSERVER
   try {
     ClientInterface::create();
@@ -542,7 +589,7 @@ int main(int argc, char **argv)
   cout << start << " " << end << endl;
   int successes = 0;
   int failures = 0;
-  
+
   long calitime = GetCurrentTimeInMilliSec();
 
 //#ifndef WITH_SCANSERVER
@@ -550,6 +597,7 @@ int main(int argc, char **argv)
     Scan::openDirectory(false, dir, type, fileNr, fileNr);
     Scan::allScans[0]->setRangeFilter(maxDist, minDist);
     Scan::allScans[0]->setHeightFilter(top, bottom);
+    if(customFilterActive) Scan::allScans[0]->setCustomFilter(customFilter);
     Scan::allScans[0]->setSearchTreeParameter(simpleKD);
 
     string output = calidir + "/scan" + to_string(fileNr,3) + ".3d";
@@ -603,7 +651,7 @@ int main(int argc, char **argv)
     cout << "DONE " << endl;
 
     cout << nx << " " << ny << " " << nz << " " << d << endl;
-    
+
 #ifdef _MSC_VER
 	if(_isnan(d)) {
 #else
@@ -661,13 +709,13 @@ int main(int argc, char **argv)
       cout << "blub" << endl;
 
     }
-   
-    
+
+
     for(int i = points.size() - 1; i > -1; i--) {
       delete[] points[i];
     }
-    
-    
+
+
     delete plane;
 
     cout << "Time for Plane Detection " << starttime << endl;

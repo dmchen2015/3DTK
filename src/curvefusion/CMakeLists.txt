@@ -16,7 +16,6 @@ if(WITH_ROS)
       geometry_msgs
       sensor_msgs
       std_msgs
-      rospy
   )
 
   find_package(Eigen3 REQUIRED)
@@ -33,8 +32,13 @@ if(WITH_ROS)
 
   include_directories(${NEWMAT_INCLUDE_DIRS})
 
-
-  add_executable(fusion fusion.cc curves.cc timestamps.cc tf_broadcaster.cc)
-  target_link_libraries(fusion ${catkin_LIBRARIES} ${Boost_SYSTEM_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} ${Boost_PROGRAM_OPTIONS_LIBRARY} ${NEWMAT_LIBRARIES_SHARED} ${OpenCV_LIBRARIES})
+  if(WITH_RIVLIB)
+    if(${RiVLib_FOUND})
+      add_executable(fusion fusion.cc common.cc extractTrajectory.cc curves.cc timestamps.cc tf_broadcaster.cc)
+      target_link_libraries(fusion ${catkin_LIBRARIES} ${Boost_SYSTEM_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} ${Boost_PROGRAM_OPTIONS_LIBRARY} ${NEWMAT_LIBRARIES} ${OpenCV_LIBRARIES} ${RiVLib_CTRLLIB_LIBRARY} ${RiVLib_SCANLIB_LIBRARY})
+    else()
+      message("Cannot build curvefusion. Need RiVLib version 2.2 or newer!")
+    endif()
+  endif()
 endif()
 

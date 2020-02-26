@@ -21,7 +21,7 @@
 #endif
 #endif
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 #include <windows.h>
 #else
 #include <dlfcn.h>
@@ -44,7 +44,6 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/condition.hpp>
 
-using namespace boost;
 using boost::thread;
 boost::mutex draw_mutex;
 
@@ -785,7 +784,7 @@ int Show(int frameno)
 
     while(ICPFinished ==false)
     {
-#ifdef _MSC_VER
+#ifdef _WIN32
         Sleep(1);
 #else
     usleep(10000);

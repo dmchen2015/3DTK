@@ -10,14 +10,16 @@ class QtShow : public QApplication {
 
 public:
   QtShow(int &argc, char **argv);
+  ~QtShow() override;
 
 public slots:
-  void loadDifferentScan(dataset_settings ds);
+  void loadDifferentScan(dataset_settings dss);
 
 protected:
   MainWindow *mainWindow;
-  dataset_settings ds;
+  dataset_settings dss;
   window_settings ws;
+  display_settings ds;
 };
 
 #endif

@@ -13,12 +13,13 @@ bool   mousemoving    = false;      // true if a mouse button has been pressed
 bool   keypressed     = false;      // true if a key button has been pressed
                                     // inside a window,
                                     // but has not been released
-double ptstodisplay   = 100000;  
-double lastfps        = idealfps;   // last frame rate    
+double ptstodisplay   = 100000;
+double lastfps        = idealfps;   // last frame rate
 int    pointmode      = -1;
 
 bool   smallfont      = true;
-bool   label          = false;
+bool   label          = !hide_label;
+bool   classLabels    = !hide_classLabels;
 
 #include "show/url.h"
 
@@ -39,8 +40,9 @@ void DrawPoints(GLenum mode, bool interruptable)
 
   // In case of animation
   if(frameNr != 0) {
-    if (coloranim)
+    if (coloranim == 0) {
       cm->setMode(ScanColorManager::MODE_ANIMATION);
+    }
 
     for(int iterator = (int)octpts.size()-1; iterator >= 0; iterator--) {
 
@@ -66,7 +68,7 @@ void DrawPoints(GLenum mode, bool interruptable)
         type = MetaAlgoType[iterator][frameNr];
       }
       if(type == Scan::INVALID) continue;
-      cm->selectColors(type);      
+      cm->selectColors(type);
       glPushMatrix();
       glMultMatrixd(frame);
 
@@ -104,7 +106,7 @@ void DrawPoints(GLenum mode, bool interruptable)
           glEnd();
         }
         glPointSize(pointsize);
-        
+
         glFlush();
         glPopMatrix();
       }
@@ -146,17 +148,21 @@ void DrawPoints(GLenum mode, bool interruptable)
         }
         if (type == Scan::INVALID) continue;
         glPushMatrix();
-        if (invert)                               
+        if (invert)
           // default: white points on black background
           glColor4d(1.0, 1.0, 1.0, 0.0);
-        else                                      
+        else
           // black points on white background
           glColor4d(0.0, 0.0, 0.0, 0.0);
 
         // glMultMatrixd(MetaMatrix[iterator].back());
         if (current_frame != (int)MetaMatrix.back().size() - 1) {
-          cm->setMode(ScanColorManager::MODE_ANIMATION);
-          cm->selectColors(type);
+          if (coloranim == 0) {
+            cm->setMode(ScanColorManager::MODE_ANIMATION);
+            cm->selectColors(type);
+          } else {
+            setScansColored(0);
+          }
         }
         glMultMatrixd(frame);
 
@@ -186,7 +192,7 @@ void DrawPoints(GLenum mode, bool interruptable)
           glEnd();
           glPointSize(pointsize);
         }
-        
+
         glPopMatrix();
       }
     }
@@ -220,22 +226,22 @@ void DrawObjects(GLenum mode) {
  */
 void DrawPath()
 {
-  
+
   glLineWidth(10.0);
   // draw path
   glBegin(GL_LINE_STRIP);
   for(unsigned int j = 0; j < path_vectorX.size(); j++){
-    // set the color 
+    // set the color
     glColor4f(0.0, 1.0, 0.0, 1.0);
     // set the points
     glVertex3f(path_vectorX.at(j).x,path_vectorX.at(j).y,path_vectorZ.at(j).y);
   }
   glEnd();
-  
+
   // draw lookat path
   glBegin(GL_LINE_STRIP);
   for(unsigned int j = 0; j < lookat_vectorX.size(); j++){
-    //set the color 
+    //set the color
     glColor4d(1.0, 1.0, 0.0, 1.0);
     //set the points
     glVertex3f(lookat_vectorX.at(j).x,
@@ -243,12 +249,12 @@ void DrawPath()
                lookat_vectorZ.at(j).y);
   }
   glEnd();
-  
+
   // draw up path
   /*
   glBegin(GL_LINE_STRIP);
   for(unsigned int j = 0; j < ups_vectorX.size(); j++){
-    //set the color 
+    //set the color
     glColor4d(0.0, 1.0, 0.0, 0.7);
     //set the points
     glVertex3f(ups_vectorX.at(j).x,ups_vectorX.at(j).y,ups_vectorZ.at(j).y);
@@ -265,8 +271,8 @@ void DrawCameras(void)
 {
   for (unsigned int i = 0; i < cams.size(); i++) {
     glPushMatrix();
-    
- // TODO improve upon this primitive camera   
+
+ // TODO improve upon this primitive camera
     Point p = cams[i];
     Point l = Point::norm( lookats[i] - p );  // forward vector
     Point u = Point::norm( ups[i] - p );      // up vector
@@ -276,15 +282,15 @@ void DrawCameras(void)
     u = 5 * u;
 
     Point cube[8];
-    cube[0] = p + l - r - u; 
-    cube[1] = p + l + r - u; 
-    cube[2] = p - l + r - u; 
-    cube[3] = p - l - r - u; 
-    cube[4] = p + l - r + u;  
-    cube[5] = p + l + r + u;  
-    cube[6] = p - l + r + u;  
+    cube[0] = p + l - r - u;
+    cube[1] = p + l + r - u;
+    cube[2] = p - l + r - u;
+    cube[3] = p - l - r - u;
+    cube[4] = p + l - r + u;
+    cube[5] = p + l + r + u;
+    cube[6] = p - l + r + u;
     cube[7] = p - l - r + u;
-    
+
     int sides[6][4] = {{0,1,2,3}, {4,5,6,7}, {0,1,5,4},
                        {3,2,6,7}, {1,2,6,5}, {0,3,7,4}};
 
@@ -294,7 +300,7 @@ void DrawCameras(void)
       glColor4f(0, 1, 0, 1);
     }
     // camera cube
-    glPolygonMode (GL_FRONT_AND_BACK, GL_FILL); 
+    glPolygonMode (GL_FRONT_AND_BACK, GL_FILL);
     glBegin(GL_QUADS);
       for (int j = 0; j < 6; j++) {
         if (j == 2) continue;
@@ -304,10 +310,10 @@ void DrawCameras(void)
         }
       }
     glEnd();
-   
+
     r = 5 * r;
     u = 5 * u;
-    
+
     glColor4f(1, 1, 0, 1);
     if (i+1 == cam_choice) {
       glPointSize(10);
@@ -319,19 +325,19 @@ void DrawCameras(void)
     glEnd();
 
     Point fcube[8];
-    fcube[0] = cube[4]; 
+    fcube[0] = cube[4];
     fcube[1] = cube[5];
     fcube[2] = cube[1];
     fcube[3] = cube[0];
-    fcube[4] = lookats[i] - r + u;  
-    fcube[5] = lookats[i] + r + u;  
-    fcube[6] = lookats[i] + r - u;  
-    fcube[7] = lookats[i] - r - u;  
-    
+    fcube[4] = lookats[i] - r + u;
+    fcube[5] = lookats[i] + r + u;
+    fcube[6] = lookats[i] + r - u;
+    fcube[7] = lookats[i] - r - u;
+
     glLineWidth(2.0);
     glLineStipple(1, 0x0C0F);
     glEnable(GL_LINE_STIPPLE);
-    glPolygonMode (GL_FRONT_AND_BACK, GL_LINE); 
+    glPolygonMode (GL_FRONT_AND_BACK, GL_LINE);
     // camera FOV
     glBegin(GL_QUADS);
       for (int j = 0; j < 6; j++) {
@@ -347,9 +353,111 @@ void DrawCameras(void)
   }
 }
 
+void DrawTypeLegend() {
+  // Only draw when Color value = type (for classification tasks)
+  if (listboxColorVal==5) {
+  //	glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+    glMatrixMode(GL_PROJECTION);
+
+    // Save the current projection matrix
+    glPushMatrix();
+    // Make the current matrix the identity matrix
+    glLoadIdentity();
+
+    // Set the projection (to 2D orthographic)
+    glOrtho(0.0,current_width,0.0,current_height,-1,1);
+
+    int treshold = 20; // If number of different types is >treshold, dont show indivdual entry for each class/type.
+    int min = (int) mincolor_value;
+    int max = (int) maxcolor_value;
+    //unsigned int buckets = cm->staticManager.back()->buckets;
+    unsigned int buckets = cm->getBuckets();
+    float** colorMap = cm->getColorMap();
+
+    float color[3];
+
+    char text[25];
+
+    glDisable(GL_FOG);
+    // Show at maximum 20 classes/types individually
+    if (max - min < treshold) {
+      int spacing = 20; // Spaing between class labels in pixel
+      int nr_values = max-min;
+      float bucket_steps = buckets/nr_values;
+      int startY = (nr_values+2)*spacing;
+      for (int i=0;i<=nr_values;i++) {
+        //char test[100];
+        glColor3d(1,1,1);
+        color[0] = colorMap[(int)(i*bucket_steps)][0];
+        color[1] = colorMap[(int)(i*bucket_steps)][1];
+        color[2] = colorMap[(int)(i*bucket_steps)][2];
+
+        sprintf(text, "Class %i", min+i);
+        glRasterPos3f(current_width-100      , startY-i*spacing     , 1);
+        _glutBitmapString(GLUT_BITMAP_8_BY_13 , text);
+        glBegin(GL_QUADS);
+        glColor3d(color[0],color[1],color[2]);
+        glPolygonMode(GL_FRONT, GL_FILL);
+        //glColor3d(1,0,0);
+        glVertex3f(current_width-123, startY-i*spacing+13, 1);
+        glVertex3f(current_width-110, startY-i*spacing+13, 1);
+        glVertex3f(current_width-110, startY-i*spacing, 1);
+        glVertex3f(current_width-123, startY-i*spacing, 1);
+        glColor3d(0,0,0);
+        glPolygonMode(GL_FRONT, GL_LINE);
+        glVertex3f(current_width-124, startY-i*spacing+14, 1);
+        glVertex3f(current_width-109, startY-i*spacing+14, 1);
+        glVertex3f(current_width-109, startY-i*spacing-1, 1);
+        glVertex3f(current_width-124, startY-i*spacing-1, 1);
+        glEnd();
+      }
+    }
+    else { // Show color bar instead of individual entries
+      int legendHeight = 100; // Pixels
+      float bucket_steps = buckets/(legendHeight-1); // 100 pixel color bar
+      int startY = 140;
+      glLineWidth(1);
+      glBegin(GL_LINES);
+
+      for (int i=0; i<legendHeight; i++) {
+        color[0] = colorMap[(int)(i*bucket_steps)][0];
+        color[1] = colorMap[(int)(i*bucket_steps)][1];
+        color[2] = colorMap[(int)(i*bucket_steps)][2];
+        glColor3d(color[0],color[1],color[2]);
+        glVertex3f(current_width-73, startY-i, 1);
+        glVertex3f(current_width-60, startY-i, 1);
+      }
+      glEnd();
+      glBegin(GL_QUADS);
+      glColor3d(0,0,0);
+      glPolygonMode(GL_FRONT, GL_LINE);
+      glVertex3f(current_width-74, startY+1, 1);
+      glVertex3f(current_width-59, startY+1, 1);
+      glVertex3f(current_width-59, startY-legendHeight, 1);
+      glVertex3f(current_width-74, startY-legendHeight, 1);
+      glEnd();
+      glColor3d(1,1,1);
+      sprintf(text, "%i", min);
+      glRasterPos3f(current_width-50, startY, 1);
+      _glutBitmapString(GLUT_BITMAP_8_BY_13 , text);
+      sprintf(text, "%i", max);
+      glRasterPos3f(current_width-50, startY-legendHeight, 1);
+      _glutBitmapString(GLUT_BITMAP_8_BY_13 , text);
+    }
+    glEnable(GL_FOG);
+
+    // Restore the original projection matrix
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+  }
+}
+
 void DrawScala() {
   if (factor != 1) return;
-  
+
 	glDisable(GL_FOG);
 	if (showViewMode != 1) return;
 	glMatrixMode(GL_MODELVIEW);
@@ -513,7 +621,7 @@ void DrawCoordinateSystems() {
     glLineWidth(5.0);
     glBegin(GL_LINES);
 
-    float s = 10.0*MetaMatrix[i][j][15];
+    float s = 10.0*MetaMatrix[i][j][15]*0.01/scale;
     glColor3f(1,0.0,0.0);
     glVertex3f(MetaMatrix[i][j][12], MetaMatrix[i][j][13], MetaMatrix[i][j][14]);
     glVertex3f(MetaMatrix[i][j][12] + s*MetaMatrix[i][j][0], MetaMatrix[i][j][13] + s*MetaMatrix[i][j][1], MetaMatrix[i][j][14] + s*MetaMatrix[i][j][2]);
@@ -554,7 +662,7 @@ void setup_camera() {
       double delta_quat[4] = {cos(ar), dy * as, dx * as, 0.0};
 
       QMult(delta_quat, now_quat, tmp_quat);
-      QuatToMatrix4(tmp_quat, 0, rot_mat); 
+      QuatToMatrix4(tmp_quat, 0, rot_mat);
     }
 
     glMultMatrixd(rot_mat);
@@ -577,7 +685,7 @@ void setup_camera() {
                     ups.at(path_iterator).y-cams.at(path_iterator).y,
                     ups.at(path_iterator).z-cams.at(path_iterator).z);
       } else if (haveToUpdate == 6 && path_iterator < path_vectorX.size()) {
-    
+
     if(path3D) {
       double * lc = new double[3];
       double * uc = new double[3];
@@ -597,10 +705,10 @@ void setup_camera() {
       lc[1] = l.y - p.y;
       lc[2] = l.z - p.z;
 
-      uc[0] = u.x; 
-      uc[1] = u.y; 
-      uc[2] = u.z; 
-      
+      uc[0] = u.x;
+      uc[1] = u.y;
+      uc[2] = u.z;
+
       Cross(lc,uc,n);
       Normalize3(n);
       p.x = p.x + n[0] * shifted;
@@ -613,7 +721,7 @@ void setup_camera() {
       delete[] lc;
       delete[] uc;
       delete[] n;
-      
+
       gluLookAt(p.x,p.y,p.z,l.x,l.y,l.z,u.x,u.y,u.z);
 
     } else {
@@ -625,7 +733,7 @@ void setup_camera() {
                 lookat_vectorX.at(path_iterator).y,
                 lookat_vectorZ.at(path_iterator).y,
                 ups_vectorX.at(path_iterator).x-path_vectorX.at(path_iterator).x,
-                ups_vectorX.at(path_iterator).y-path_vectorX.at(path_iterator).y, 
+                ups_vectorX.at(path_iterator).y-path_vectorX.at(path_iterator).y,
                 ups_vectorZ.at(path_iterator).y-path_vectorZ.at(path_iterator).y);
     }
   } else {
@@ -648,12 +756,12 @@ void setup_camera() {
       mouseRotX = deg(rPT[0]);
       mouseRotY = deg(rPT[1]);
       mouseRotZ = deg(rPT[2]);
-    
+
     }
     if (!nogui && !takescreenshot)
       updateControls();
 
-    glTranslated(X, Y, Z);       // move camera     
+    glTranslated(X, Y, Z);       // move camera
   }
 
 #ifdef WITH_LOGGING
@@ -670,7 +778,7 @@ void setup_fog() {
 
     if (show_fog > 3) // One of the "inverted fog" options
       fogColor[0] = fogColor[1] = fogColor[2] = fogColor[3] = 1.0;
-    else 
+    else
       fogColor[0] = fogColor[1] = fogColor[2] = fogColor[3] = 0.0;
 
     // by setting the fardistance there we gain some performance
@@ -737,7 +845,7 @@ void DisplayItFunc(GLenum mode, bool interruptable)
   glPushMatrix();
 
   setup_camera();
-  
+
   DrawScala();
 
   // process fog
@@ -752,10 +860,10 @@ void DisplayItFunc(GLenum mode, bool interruptable)
     glGetIntegerv(GL_VIEWPORT, viewport);
     reshape(viewport[2], viewport[3]);
   }
- 
+
   // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  // 
-  // show the objects __after__ the model-transformation 
+  //
+  // show the objects __after__ the model-transformation
   // for all status variables we show the appropiated thing
   // using the drawing functions
   //
@@ -822,7 +930,7 @@ void DisplayItFunc(GLenum mode, bool interruptable)
   if (show_cameras == 1) {
     DrawCameras();
   }
-  
+
   // if show path is true the draw path.
   if (show_path == 1) {
     DrawPath();
@@ -832,19 +940,19 @@ void DisplayItFunc(GLenum mode, bool interruptable)
     DrawCoordinateSystems();
   }
   DrawObjects(mode);
-  
+
   // if show points is true the draw points
   if (show_points == 1) DrawPoints(mode, interruptable);
-  
-  
+
+  if (classLabels) DrawTypeLegend();
   if (label) DrawUrl();
-  
+
   glPopMatrix();
 
   if (!invert) {
     glDisable(GL_COLOR_LOGIC_OP);
   }
-  
+
   // force draw the scene
   glFlush();
   glFinish();
@@ -897,11 +1005,11 @@ void topView()
   static GLdouble save_qx, save_qy, save_qz, save_qangle;
   static GLdouble save_X, save_Y, save_Z;
   static GLdouble saveMouseRotX, saveMouseRotY, saveMouseRotZ;
-  
+
   if (showViewMode != 1) // set to top view
   {
     showViewMode = 1;
-    
+
     // save current pose
     save_X      = X;
     save_Y      = Y;
@@ -913,7 +1021,7 @@ void topView()
     saveMouseRotX = mouseRotX;
     saveMouseRotY = mouseRotY;
     saveMouseRotZ = mouseRotZ;
-      
+
     Y = Y - 350.0;
     Z = Z + 500.0;
     quat[0] = quat[1] = sqrt(0.5);
@@ -921,13 +1029,13 @@ void topView()
     mouseRotX = 90;
     mouseRotY = 0;
     mouseRotZ = 0;
-    
+
     haveToUpdate = 2;
-       
+
   } else {
-    
+
     showViewMode = 0;
-    
+
     // restore old settings
     X = save_X;
     Y = save_Y;
@@ -939,8 +1047,8 @@ void topView()
     mouseRotX = saveMouseRotX;
     mouseRotY = saveMouseRotY;
     mouseRotZ = saveMouseRotZ;
-    
-    haveToUpdate = 2;      
+
+    haveToUpdate = 2;
   }
 }
 
@@ -952,7 +1060,7 @@ void rotateView()
   static GLdouble save_qx, save_qy, save_qz, save_qangle;
   static GLdouble save_X, save_Y, save_Z;
   static GLdouble saveMouseRotX, saveMouseRotY, saveMouseRotZ;
-  
+
   if(showViewMode != 2) {
     showViewMode = 2;
 
@@ -986,7 +1094,7 @@ void rotateView()
     haveToUpdate = 2;
   }
 }
-    
+
 
 //---------------------------------------------------------------------------
 /**
@@ -994,7 +1102,7 @@ void rotateView()
  * delete a camera.
  */
 void callDeleteCamera(int dummy){
- 
+
   // iterator for the position of camera
   // in the camera list
   std::vector<Point>::iterator position;
@@ -1019,7 +1127,7 @@ void callDeleteCamera(int dummy){
     ups.erase(positionU);
     // reset the cam_choice spinner values
   }
-  
+
   updateCamera();
 }
 
@@ -1032,7 +1140,7 @@ void callDeleteCamera(int dummy){
 void resetView(int dummy)
 {
   cangle = 60.0;
-  pzoom = defaultZoom; 
+  pzoom = defaultZoom;
   X = RVX;
   Y = RVY;
   Z = RVZ;
@@ -1051,10 +1159,10 @@ void resetView(int dummy)
 /**
  * Function to set the viewer window back to a previously saved state.
  */
-void setView(double pos[3], double new_quat[4], 
-             double newMouseRotX, double newMouseRotY, double newMouseRotZ, 
+void setView(double pos[3], double new_quat[4],
+             double newMouseRotX, double newMouseRotY, double newMouseRotZ,
              double newCangle,
-             int sVM, bool cNMM, double pzoom_new, 
+             int sVM, bool cNMM, double pzoom_new,
              bool s_points, bool s_path, bool s_cameras, bool s_poses, double ps, int
              sf, double fD, bool inv)
 {
@@ -1081,7 +1189,7 @@ void setView(double pos[3], double new_quat[4],
   show_fog = sf;
   fogDensity = fD;
   invert = inv;
-  
+
   haveToUpdate = 2;
 }
 
@@ -1093,7 +1201,7 @@ void update_view_rotate(int t)
 {
   double view_rotate_button_quat[4];
 
-  // convert the rotate button matrix to quaternion 
+  // convert the rotate button matrix to quaternion
   double mat[16];
   for (int i = 0; i < 16; i++)
     mat[i] = view_rotate_button[i];
@@ -1101,7 +1209,7 @@ void update_view_rotate(int t)
 
   // normalize the quartenion
   QuatNormalize(view_rotate_button_quat);
-    
+
   if(view_rotate_button_quat[0] == 1.0) return;
   // copy it to the global quartenion quat
   memcpy(quat, view_rotate_button_quat, sizeof(quat));
@@ -1123,19 +1231,19 @@ void update_view_translation(int t)
 
   X = X + obj_pos_button1[0] * view_rotate_button[0]
     + obj_pos_button1[1] * view_rotate_button[1]
-    + obj_pos_button1[2] * view_rotate_button[2]; 
+    + obj_pos_button1[2] * view_rotate_button[2];
   Y = Y + obj_pos_button1[0] * view_rotate_button[4]
     + obj_pos_button1[1] * view_rotate_button[5]
-    + obj_pos_button1[2] * view_rotate_button[6]; 
+    + obj_pos_button1[2] * view_rotate_button[6];
   Z = Z + obj_pos_button1[0] * view_rotate_button[8]
     + obj_pos_button1[1] * view_rotate_button[9]
-    + obj_pos_button1[2] * view_rotate_button[10]; 
+    + obj_pos_button1[2] * view_rotate_button[10];
 }
 
 
 /**
  * handles the animation button
- * @param dummy not needed necessary for glui 
+ * @param dummy not needed necessary for glui
  */
 void startAnimation(int dummy)
 {
@@ -1148,8 +1256,8 @@ void startAnimation(int dummy)
 }
 
 /**
- * calls the resetView function 
- * @param dummy not needed necessary for glui 
+ * calls the resetView function
+ * @param dummy not needed necessary for glui
  */
 void callResetView(int dummy)
 {
@@ -1159,8 +1267,8 @@ void callResetView(int dummy)
 }
 
 /**
- * calls the resetView function 
- * @param dummy not needed necessary for glui 
+ * calls the resetView function
+ * @param dummy not needed necessary for glui
  */
 void invertView(int dummy)
 {
@@ -1168,11 +1276,11 @@ void invertView(int dummy)
 }
 
 /**
- * calls the topView function 
- * @param dummy not needed necessary for glui 
+ * calls the topView function
+ * @param dummy not needed necessary for glui
  */
 void callTopView(int dummy)
-{ 
+{
   topView();
   if (showViewMode == 1) {
     rotButton->disable();
@@ -1206,8 +1314,8 @@ void callRotateView(int dummy)
 }
 
 /**
- * calls the cameraView function 
- * @param dummy not needed necessary for glui 
+ * calls the cameraView function
+ * @param dummy not needed necessary for glui
  */
 void callAddCamera(int dummy)
 {
@@ -1217,22 +1325,22 @@ void callAddCamera(int dummy)
   Point lookat;
   Point up(0, 0, 0);
   double tmat[16];
-  for (int i =0;i<16;i++) tmat[i] = view_rotate_button[i];
-  
-  lookat.x = -50*tmat[2] -X;
-  lookat.y = -50*tmat[6] -Y;
-  lookat.z = -50*tmat[10] -Z;
+  for (int i = 0; i < 16; i++) tmat[i] = view_rotate_button[i];
 
-  up.x = 50*tmat[1] -X; 
-  up.y = 50*tmat[5] -Y; 
-  up.z = 50*tmat[9] -Z; 
+  lookat.x = -50*tmat[2]  - X;
+  lookat.y = -50*tmat[6]  - Y;
+  lookat.z = -50*tmat[10] - Z;
+
+  up.x = 50*tmat[1] -X;
+  up.y = 50*tmat[5] -Y;
+  up.z = 50*tmat[9] -Z;
 
   cams.push_back(campos);
   lookats.push_back(lookat);
   ups.push_back(up);
-  
+
   updateCamera();
-  
+
   // signal to repaint screen
   haveToUpdate  = 1;
 }
@@ -1271,7 +1379,7 @@ void selectPoints(int x, int y) {
     mouseRotZ = deg(rPT[2]);
   }
   updateControls();
-    glTranslated(X, Y, Z);       // move camera     
+    glTranslated(X, Y, Z);       // move camera
 
     static sfloat *sp2 = 0;
     for(int iterator = (int)octpts.size()-1; iterator >= 0; iterator--) {
@@ -1300,7 +1408,7 @@ void selectPoints(int x, int y) {
                  << sqrt( sqr(sp2[0] - sp[0]) +
                           sqr(sp2[1] - sp[1]) +
                           sqr(sp2[2] - sp[2])  )
-                 << std::endl; 
+                 << std::endl;
           }
           sp2 = sp;
 
@@ -1335,7 +1443,7 @@ void selectPoints(int x, int y) {
     gluPickMatrix((GLdouble)x, (GLdouble)(viewport[3]-y),
                   brush_size*2, brush_size*2,
                   viewport);
-    gluPerspective(cangle, aspect, neardistance, fardistance); 
+    gluPerspective(cangle, aspect, neardistance, fardistance);
     glMatrixMode(GL_MODELVIEW);
     DisplayItFunc(GL_SELECT);
 
@@ -1355,8 +1463,8 @@ void moveCamera(double x, double y, double z,
                 double rotx, double roty, double rotz) {
   interruptDrawing();
   double mat[9];
-  
-  double xr = M_PI * mouseRotX / 180; 
+
+  double xr = M_PI * mouseRotX / 180;
   double yr = M_PI * mouseRotY / 180;
   double zr = M_PI * mouseRotZ / 180;
   double c1,c2,c3,s1,s2,s3;
@@ -1379,7 +1487,7 @@ void moveCamera(double x, double y, double z,
   mouseRotX += rotx;
   mouseRotY -= roty;
   mouseRotZ -= rotz;
-  
+
   if (mouseRotX < -90) mouseRotX=-90;
   else if (mouseRotX > 90) mouseRotX=90;
   if (mouseRotY > 360) mouseRotY-=360;
@@ -1388,7 +1496,7 @@ void moveCamera(double x, double y, double z,
   else if (mouseRotZ < 0) mouseRotZ+=360;
 
   transX += x * mat[0] + y * mat[3] + z * mat[6];
-  transY += x * mat[1] + y * mat[4] + z * mat[7];      
+  transY += x * mat[1] + y * mat[4] + z * mat[7];
   transZ += x * mat[2] + y * mat[5] + z * mat[8];
 
   X += transX;
@@ -1504,8 +1612,8 @@ void glDumpWindowPPM(const char *filename, GLenum mode)
   }                                      // end row
 
   // to make a video do:
-  // for f in *ppm ; do convert -quality 100 $f `basename $f ppm`jpg; done 
-  // mencoder "mf://*.jpg" -mf fps=10 -o test.avi -ovc lavc -lavcopts vcodec=msmpeg4v2:vbitrate=800 
+  // for f in *ppm ; do convert -quality 100 $f `basename $f ppm`jpg; done
+  // mencoder "mf://*.jpg" -mf fps=10 -o test.avi -ovc lavc -lavcopts vcodec=msmpeg4v2:vbitrate=800
   // Write output buffer to the file */
   fp.write((const char*)ibuffer, sizeof(unsigned char) * (RGB_ * win_width * win_height));
   fp.close();
@@ -1536,13 +1644,6 @@ void writePngInBackground(const char *filename, unsigned char *ibuffer, int imag
     png_init_io(png, fp);
     png_set_IHDR(png, info, image_width, image_height, 8 /* depth */, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
         PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
-    png_colorp palette = (png_colorp)png_malloc(png, PNG_MAX_PALETTE_LENGTH * sizeof(png_color));
-    if (!palette) {
-        fclose(fp);
-        png_destroy_write_struct(&png, &info);
-        return;
-    }
-    png_set_PLTE(png, info, palette, PNG_MAX_PALETTE_LENGTH);
     png_write_info(png, info);
     png_set_packing(png);
 
@@ -1552,7 +1653,6 @@ void writePngInBackground(const char *filename, unsigned char *ibuffer, int imag
 
     png_write_image(png, rows);
     png_write_end(png, info);
-    png_free(png, palette);
     png_destroy_write_struct(&png, &info);
 
     fclose(fp);
@@ -1587,7 +1687,7 @@ void glWriteImagePNG(const char *filename, int scale, GLenum mode)
     // Get viewport parameters
     double left, right, top, bottom;
     double tmp = 1.0/tan(rad(cangle)/2.0);
-   
+
     // Save camera parameters
     GLdouble savedMatrix[16];
     glGetDoublev(GL_PROJECTION_MATRIX,savedMatrix);
@@ -1624,7 +1724,7 @@ void glWriteImagePNG(const char *filename, int scale, GLenum mode)
     unsigned char *ibuffer;       // The PNG Output Buffer
     buffer = new GLubyte[win_width * win_height * RGBA_];
     ibuffer = new unsigned char[image_width * image_height * RGB_];
-    
+
     smallfont = (scale==1);
     double height;
     if(showViewMode != 1) {
@@ -1639,10 +1739,11 @@ void glWriteImagePNG(const char *filename, int scale, GLenum mode)
       } else {
         width = -pzoom*aspect;
       }
-      for(int j = 0; j < scale; j++) { 
+      for(int j = 0; j < scale; j++) {
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
         label = false;
+        classLabels = false;
         if(showViewMode != 1) {
           glFrustum(neardistance*width, neardistance*(width + part_width),
                     neardistance*(height),
@@ -1650,20 +1751,26 @@ void glWriteImagePNG(const char *filename, int scale, GLenum mode)
                     neardistance, fardistance);
           glMatrixMode(GL_MODELVIEW);
           if(i==0 && j==0) {
-            label = true; 
+            label = !hide_label;
           }
-          DisplayItFunc(mode); 
+          if(i==0 && j==scale-1) {
+            classLabels = !hide_classLabels;
+          }
+          DisplayItFunc(mode);
         } else {
-          glOrtho( width, width + part_width, 
-                   height, height + part_height, 
+          glOrtho( width, width + part_width,
+                   height, height + part_height,
                    1.0, 32000.0 );
           glMatrixMode(GL_MODELVIEW);
           if(i==0 && j==0) {
-            label = true;
+            label = !hide_label;
+          }
+          if(i==0 && j==scale-1) {
+            classLabels = !hide_classLabels;
           }
           DisplayItFunc(mode);
         }
-    
+
         // Read window contents from GL frame buffer with glReadPixels
         glFinish();
         glReadBuffer(buffermode);
@@ -1671,7 +1778,7 @@ void glWriteImagePNG(const char *filename, int scale, GLenum mode)
                      win_width, win_height,
                      GL_RGBA, GL_UNSIGNED_BYTE,
                      buffer);
-       
+
         // Loop through the frame buffer data, writing to the PNG file.
         // Be careful
         // to account for the frame buffer having 4 bytes per pixel while the
@@ -1692,15 +1799,15 @@ void glWriteImagePNG(const char *filename, int scale, GLenum mode)
       }
       height += part_height;
     }
-   
-    // show the starting scene 
+
+    // show the starting scene
     // Restore the original projection matrix
     glMatrixMode(GL_PROJECTION);
     glLoadMatrixd(savedMatrix);
     glMatrixMode(GL_MODELVIEW);
     glLoadMatrixd(savedModel);
     // show the rednered scene
-    label = true;
+    label = !hide_label;
     smallfont = true;
     haveToUpdate=2;
     DisplayItFunc(mode);
@@ -1744,7 +1851,7 @@ void ProcessHitsFunc(GLint hits, GLuint buffer[])
   if (names.empty()) return;
 
   int index = 0;
-  std::set<int>::iterator nit = names.begin(); 
+  std::set<int>::iterator nit = names.begin();
   // find the respective name
 
   for(int iterator = (int)octpts.size()-1; iterator >= 0; iterator--) {
@@ -1763,7 +1870,7 @@ void ProcessHitsFunc(GLint hits, GLuint buffer[])
   Done:
 
   std::cout << "Erasing " << std::endl;
-  for (std::set<sfloat*>::iterator it = unsel_points.begin(); 
+  for (std::set<sfloat*>::iterator it = unsel_points.begin();
       it != unsel_points.end(); it++) {
     // iterate to the index as indicated by the name *ptr
     for(int iterator = (int)octpts.size()-1; iterator >= 0; iterator--) {
@@ -1783,8 +1890,8 @@ void ProcessHitsFunc(GLint hits, GLuint buffer[])
 
 void InterfaceFunc(unsigned char key)
 {
-  strncpy(path_file_name, path_filename_edit->get_text(), 1024);  
-  strncpy(pose_file_name, pose_filename_edit->get_text(), 1024);  
+  strncpy(path_file_name, path_filename_edit->get_text(), 1024);
+  strncpy(pose_file_name, pose_filename_edit->get_text(), 1024);
   return;
 }
 
@@ -1817,23 +1924,23 @@ void drawRobotPath(int dummy)
     Point lookat(0, 0, 50);
     Point up(0, 50, 0);
     double tmat[16];
-    for (int i =0;i<16;i++) tmat[i] = temp[i]; 
+    for (int i =0;i<16;i++) tmat[i] = temp[i];
     lookat.transform(tmat);
-    lookat.x = lookat.x ; 
-    lookat.y = lookat.y + 100; 
-    lookat.z = lookat.z  ; 
-    
+    lookat.x = lookat.x ;
+    lookat.y = lookat.y + 100;
+    lookat.z = lookat.z  ;
+
     up.transform(tmat);
-    up.x = up.x ; 
-    up.y = up.y + 100; 
-    up.z = up.z  ; 
+    up.x = up.x ;
+    up.y = up.y + 100;
+    up.z = up.z  ;
 
     cams.push_back(campos);
     lookats.push_back(lookat);
     ups.push_back(up);
   }
   updateCamera();
-   
+
   // signal for the update of scene
   haveToUpdate = 1;
 }
@@ -1855,7 +1962,7 @@ void calcInterpolatedCameras(std::vector<PointXY> vec1, std::vector<PointXY> vec
 
     distance += sqrt(dx*dx + dy*dy + dz*dz );
   }
-  double distance2 = 0.0; 
+  double distance2 = 0.0;
   int im_per_cam = (distance/2.0)/(vec1.size() - 1);
   int count = 0;
   for(unsigned int i = 0; i < vec1.size()-1; i++) {
@@ -1870,7 +1977,7 @@ void calcInterpolatedCameras(std::vector<PointXY> vec1, std::vector<PointXY> vec
                                         * (curr_dist/(double)im_per_cam)))
                                     /(distance + 0.1));
     }
-    
+
     distance2 += sqrt(dx*dx + dy*dy + dz*dz);
   }
 }
@@ -1978,10 +2085,10 @@ void resetMinMax(int dummy) {
 
 void setScansColored(int dummy) {
   switch(colorScanVal) {
-    case 0: 
+    case 0:
       cm->setMode(ScanColorManager::MODE_STATIC);
       break;
-    case 1: 
+    case 1:
       cm->setMode(ScanColorManager::MODE_COLOR_SCAN);
       break;
     case 2:
@@ -2023,7 +2130,7 @@ void calcPointSequence(std::vector<int> &sequence, int frameNr)
   sequence.clear();
   std::vector<std::pair<double, int> > dists;
   double x,y,z;
- 
+
   for (unsigned int i = 0; i < octpts.size(); i++) {
     // stop at scans that don't have any frames associated with them
     if(i >= MetaMatrix.size()) break;

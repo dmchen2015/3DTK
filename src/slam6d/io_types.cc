@@ -34,7 +34,7 @@ IOType formatname_to_io_type(const char * string)
   else if (strcasecmp(string, "las") == 0) return LAZ;
   else if (strcasecmp(string, "laz") == 0) return LAZ;
   else if (strcasecmp(string, "leica") == 0) return LEICA;
-  else if (strcasecmp(string, "leica_xyzr") == 0) return LEICA_XYZR; 
+  else if (strcasecmp(string, "leica_xyzr") == 0) return LEICA_XYZR;
   else if (strcasecmp(string, "oct") == 0) return OCT;
   else if (strcasecmp(string, "old") == 0) return OLD;
   else if (strcasecmp(string, "pci") == 0) return PCI;
@@ -67,14 +67,17 @@ IOType formatname_to_io_type(const char * string)
   else if (strcasecmp(string, "velodyne") == 0) return VELODYNE;
   else if (strcasecmp(string, "velodyne_frames") == 0) return VELODYNE_FRAMES;
   else if (strcasecmp(string, "wrl") == 0) return WRL;
-  else if (strcasecmp(string, "x3d") == 0) return X3D;  
-  else if (strcasecmp(string, "xyz") == 0) return XYZ;  
+  else if (strcasecmp(string, "x3d") == 0) return X3D;
+  else if (strcasecmp(string, "xyz") == 0) return XYZ;
   else if (strcasecmp(string, "xyzr") == 0) return XYZR;
   else if (strcasecmp(string, "xyz_rgb") == 0) return XYZ_RGB;
   else if (strcasecmp(string, "xyz_rgbr") == 0) return XYZ_RGBR;
   else if (strcasecmp(string, "xyz_rrgb") == 0) return XYZ_RRGB;
-  else if (strcasecmp(string, "zahn") == 0) return ZAHN;   
+  else if (strcasecmp(string, "zahn") == 0) return ZAHN;
   else if (strcasecmp(string, "zuf") == 0) return ZUF;
+  else if (strcasecmp(string, "uos_normal") == 0) return UOS_NORMAL;
+  else if (strcasecmp(string, "xyzc") == 0) return XYZC;
+  else if (strcasecmp(string, "uosc") == 0) return UOSC;
   else throw std::runtime_error(std::string("Io type ") + string + std::string(" is unknown"));
 }
 
@@ -152,7 +155,7 @@ const char * io_type_to_libname(IOType  type)
   case UOS_MAP:
     return "scan_io_uos_map";
   case UOS_MAP_FRAMES:
-    return "scan_io_uos_map_frames";    
+    return "scan_io_uos_map_frames";
   case UOS_RGB:
     return "scan_io_uos_rgb";
   case UOS_RGBR:
@@ -183,6 +186,12 @@ const char * io_type_to_libname(IOType  type)
     return "scan_io_zahn";
   case ZUF:
     return "scan_io_zuf";
+  case UOS_NORMAL:
+    return "scan_io_uos_normal";
+  case XYZC:
+    return "scan_io_xyzc";
+  case UOSC:
+    return "scan_io_uosc";
   default:
     throw std::runtime_error(std::string("Io type ") + to_string(type) + std::string(" could not be matched to a library name"));
   }
@@ -202,7 +211,7 @@ bool supportsReflectance(const IOType iotype) {
     case XYZ_RRGB:
     case FARO_XYZ_RGBR:
     case LEICA_XYZR:
-      return true; 
+      return true;
       break;
     default:
       break;
@@ -223,6 +232,30 @@ bool supportsColor(const IOType iotype) {
       break;
     default:
        break;
+  }
+  return false;
+}
+
+bool supportsNormals(const IOType iotype) {
+  switch(iotype) {
+    case UOS_NORMAL:
+      return true;
+      break;
+    default:
+      break;
+  }
+  return false;
+}
+
+//TODO check if all file formats are included
+bool supportsType(const IOType iotype) {
+  switch(iotype) {
+    case XYZC:
+    case UOSC:
+      return true;
+      break;
+    default:
+      break;
   }
   return false;
 }

@@ -107,18 +107,30 @@ int main(int argc, char** argv){
 
   cout<<info.start<<endl;
   cout<<info.end<<endl;
-  
+
   cv::Mat panorama1, panorama2;
   panorama1.create(3600,1000,CV_8U);
   panorama2.create(3600,1000,CV_8U);
   panorama1 = cv::Scalar::all(0);
   panorama2 = cv::Scalar::all(0);
 
-  panorama1 = cv::imread(info.dir+"scan"+to_string(info.start, 3)+".png", CV_LOAD_IMAGE_GRAYSCALE );
-  panorama2 = cv::imread(info.dir+"scan"+to_string(info.end, 3)+".png", CV_LOAD_IMAGE_GRAYSCALE );
+  panorama1 = cv::imread(info.dir+"scan"+to_string(info.start, 3)+".png",
+#if CV_MAJOR_VERSION > 2
+		  cv::ImreadModes::IMREAD_GRAYSCALE
+#else
+		  CV_LOAD_IMAGE_GRAYSCALE
+#endif
+		  );
+  panorama2 = cv::imread(info.dir+"scan"+to_string(info.end, 3)+".png",
+#if CV_MAJOR_VERSION > 2
+		  cv::ImreadModes::IMREAD_GRAYSCALE
+#else
+		  CV_LOAD_IMAGE_GRAYSCALE
+#endif
+		  );
 
   feature feature1, feature2;
-  
+
   feature1.featureDetection(panorama1, info.fMethod);
   feature2.featureDetection(panorama2, info.fMethod);
 

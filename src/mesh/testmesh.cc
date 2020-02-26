@@ -13,11 +13,11 @@ int main(int argc, char **argv) {
     mesh.load(argv[1]);
   }
   else {
-    mesh.load("//home//summer//Porjects//slam6d-code//dat//test//sphere.obj");
+    mesh.load("dat//test//sphere.obj");
   }
 
   // save mesh
-  mesh.save("//home//summer//Porjects//slam6d-code//dat//test//sphere_save.obj");
+  mesh.save("dat//test//sphere_save.obj");
 
   // glut related calls
   glutInit(&argc, argv);
@@ -37,8 +37,8 @@ void display() {
   float *bbox = mesh.getBBox();
 
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  float centerX = (bbox[0] + bbox[1]) / 2, 
-    centerY = (bbox[2] + bbox[3]) / 2, 
+  float centerX = (bbox[0] + bbox[1]) / 2,
+    centerY = (bbox[2] + bbox[3]) / 2,
     centerZ = (bbox[4] + bbox[5]) / 2;
 
 	glLoadIdentity();

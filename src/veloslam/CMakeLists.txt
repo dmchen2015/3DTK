@@ -1,5 +1,5 @@
 if (WITH_OPENGL)
-  include_directories(${CXSPARSE_INCLUDE_DIRS})
+  include_directories(${SUITESPARSE_INCLUDE_DIRS})
   include_directories(${NEWMAT_INCLUDE_DIRS})
   include_directories(${GLUT_INCLUDE_DIR})
 
@@ -27,12 +27,13 @@ if (WITH_OPENGL)
   add_executable(veloslam veloslam.cc veloscan.cc debugview.cc pcddump.cc tracker.cc
    trackermanager.cc drawtrackers.cc kalmanfilter.cc matrix.cc lap.cc)
 
+  target_link_libraries(veloslam scan ${NEWMAT_LIBRARIES} ${SUITESPARSE_LIBRARIES} ${ANN_LIBRARIES} ${Boost_LIBRARIES} ${Boost_SYSTEM_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} ${Boost_THREAD_LIBRARY} ${SHOW_LIBS})
   if(UNIX)
-    target_link_libraries(veloslam dl scan_shared ${NEWMAT_LIBRARIES_STATIC} ${CXSPARSE_LIBRARIES_SHARED} ${ANN_LIBRARIES_SHARED} ${Boost_LIBRARIES} ${Boost_SYSTEM_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} ${Boost_THREAD_LIBRARY} ${SHOW_LIBS_SHARED})
+    target_link_libraries(veloslam dl)
   endif()
 
   if(WIN32)
-    target_link_libraries(veloslam scan_shared ${CXSPARSE_LIBRARIES_SHARED} ${ANN_LIBRARIES_SHARED} XGetopt ${Boost_LIBRARIES} ${Boost_SYSTEM_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} ${SHOW_LIBS_SHARED})
+    target_link_libraries(veloslam XGetopt)
   endif()
 endif()
 
@@ -45,7 +46,7 @@ endif()
  #     debugview.cc  pcddump.cc cluster_classification.cc
  #     tracker.cc  trackermanager.cc drawtrackers.cc
  #     svm.cc  clusterboundingbox.cc multiscan_random_field.cc
- #     kalmanfilter.cc matrix.cc lap.cc 
+ #     kalmanfilter.cc matrix.cc lap.cc
  #     intersection_detection.cc SegIter.model ${SHOW_SRCS})
 
 #if(UNIX)

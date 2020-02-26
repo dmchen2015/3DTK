@@ -1,3 +1,10 @@
+ /*
+ * Copyright (C) David Redondo
+ *
+ * Released under the GPL version 3.
+ *
+ */
+
 #ifndef __GRAPH_CUT_UTIL_H__
 #define __GRAPH_CUT_UTIL_H__
 
@@ -17,7 +24,7 @@
 #include <utility>
 #include <vector>
 
-#ifdef _MSC_VER
+#ifdef _WIN32
     #include <direct.h>
     #define mkdir(path,mode) _mkdir (path)
 #else

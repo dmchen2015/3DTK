@@ -2,15 +2,12 @@
 #define __SCANCOLORMANAGER_H__
 
 #ifdef WITH_GLEE
-#include "glee/GLee.h"
+#include "GLee.h"
 #endif
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 #define  _USE_MATH_DEFINES
 #include <windows.h>
-#endif
-#ifdef __CYGWIN__
-#include <windef.h>
 #endif
 #ifdef WITH_OPENGL
 #ifdef __APPLE__
@@ -35,8 +32,8 @@
 
 /**
  * This class is a special ColorManager that handles a set of Colormanagers.
- * This manager is capable of mapping managers to scans in dependence of the state of the 
- * show program. 
+ * This manager is capable of mapping managers to scans in dependence of the state of the
+ * show program.
  */
 class ScanColorManager {
   public:
@@ -47,9 +44,9 @@ class ScanColorManager {
   static const unsigned int MODE_POINT_COLOR;
 
     ScanColorManager(unsigned int _buckets, PointType type, bool animation_color = true);
-    
+
     void registerTree(colordisplay *b);
-    
+
     void setColorMap(ColorMap &cm);
     void setColorMap(ColorMap::CM &cm);
     void setCurrentType(unsigned int type);
@@ -57,6 +54,8 @@ class ScanColorManager {
     void setMode(const unsigned int &mode);
     void setInvert(bool invert);
 
+    float** getColorMap();
+    unsigned int getBuckets();
     float getMin();
     float getMax();
     float getMin(unsigned int dim);
@@ -65,7 +64,7 @@ class ScanColorManager {
     void makeValid();
 
     void selectColors(Scan::AlgoType type);
-  
+
     template<class P>
     void updateRanges(P *point);
 
@@ -81,22 +80,22 @@ class ScanColorManager {
     std::vector<CColorManager *> colorsManager;
 
     unsigned int currenttype;
-    
+
     unsigned int buckets;
 
-    /** stores minima and maxima for each point dimension */ 
+    /** stores minima and maxima for each point dimension */
     float *mins;
     float *maxs;
-    /** maps valuetypes to point dimension for easier access */ 
+    /** maps valuetypes to point dimension for easier access */
     PointType pointtype;
-    
+
     bool animationColor;            /**< Alter colors when animating        */
 
     bool valid;
     bool colorScans;
     bool inverted;
 };
-    
+
   template<class P>
     void ScanColorManager::updateRanges(P *point) {
       for (unsigned int i = 0; i < pointtype.getPointDim(); i++) {

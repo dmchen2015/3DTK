@@ -6,7 +6,7 @@
 
 /**
  * @brief .....
- * 
+ *
  * ....
  **/
 class CuGrid
@@ -21,21 +21,21 @@ public:
 	void SetM(double *m_xyz, int numpoints);
 	void SetD(double *d_xyz, int numpoints);
 	void SetRadius(double radius);
-	vector<int> fixedRangeSearch();
+	std::vector<int> fixedRangeSearch();
 
 	GridParams params;
-	
+
 	void TransformM(double *mat);
-  
+
 private:
 	double *d_m_xyz;
 	double *d_d_xyz;
-	
+
 	int msize;
 	int dsize;
-	
+
 	int device;
-	
+
 };
 
 #endif

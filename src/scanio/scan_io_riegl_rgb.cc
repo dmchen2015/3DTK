@@ -16,13 +16,6 @@
  */
 
 #include "scanio/scan_io_riegl_rgb.h"
-#include "scanio/helper.h"
-
-#include <iostream>
-using std::cout;
-using std::cerr;
-using std::endl;
-#include <vector>
 
 #ifdef _MSC_VER
 #include <windows.h>
@@ -34,42 +27,37 @@ using namespace boost::filesystem;
 
 #include "slam6d/globals.icc"
 
+const char* ScanIO_riegl_rgb::data_suffix = ".rgb";
+const char* ScanIO_riegl_rgb::pose_suffix = ".dat";
+IODataType ScanIO_riegl_rgb::spec[] = { DATA_XYZ, DATA_XYZ, DATA_XYZ,
+            DATA_DUMMY, DATA_DUMMY, DATA_DUMMY,
+            DATA_RGB, DATA_RGB, DATA_RGB, DATA_REFLECTANCE,
+            DATA_TERMINATOR };
+ScanDataTransform_riegl scanio_riegl_rgb_tf;
+ScanDataTransform& ScanIO_riegl_rgb::transform2uos = scanio_riegl_rgb_tf;
 
-
-#define DATA_PATH_PREFIX "scan"
-#define DATA_PATH_SUFFIX ".rgb"
-#define POSE_PATH_PREFIX "scan"
-#define POSE_PATH_SUFFIX ".dat"
-
-
-
-std::list<std::string> ScanIO_riegl_rgb::readDirectory(const char* dir_path, unsigned int start, unsigned int end)
-{
-    const char* suffixes[2] = { DATA_PATH_SUFFIX, NULL };
-    return readDirectoryHelper(dir_path, start, end, suffixes);
-}
 
 void ScanIO_riegl_rgb::readPose(const char* dir_path, const char* identifier, double* pose)
 {
   unsigned int i;
-  
+
   path pose_path(dir_path);
-  pose_path /= path(std::string(POSE_PATH_PREFIX) + identifier + POSE_PATH_SUFFIX);
+  pose_path /= path(std::string(posePrefix()) + identifier + poseSuffix());
   if(!exists(pose_path))
     throw std::runtime_error(std::string("There is no pose file for [") + identifier + "] in [" + dir_path + "]");
 
   // open pose file
   ifstream pose_file(pose_path);
-  
+
   // if the file is open, read contents
   if(pose_file.good()) {
     double rPos[3], rPosTheta[16];
     double inMatrix[16], tMatrix[16];
-    
+
     for (i = 0; i < 16; ++i)
       pose_file >> inMatrix[i];
     pose_file.close();
-    
+
     // transform input pose
     tMatrix[0] = inMatrix[5];
     tMatrix[1] = -inMatrix[9];
@@ -87,9 +75,9 @@ void ScanIO_riegl_rgb::readPose(const char* dir_path, const char* identifier, do
     tMatrix[13] = inMatrix[11];
     tMatrix[14] = inMatrix[3];
     tMatrix[15] = inMatrix[15];
-    
+
     Matrix4ToEuler(tMatrix, rPosTheta, rPos);
-    
+
     pose[0] = 100*rPos[0];
     pose[1] = 100*rPos[1];
     pose[2] = 100*rPos[2];
@@ -99,17 +87,6 @@ void ScanIO_riegl_rgb::readPose(const char* dir_path, const char* identifier, do
   } else {
     throw std::runtime_error(std::string("Pose file could not be opened for [") + identifier + "] in [" + dir_path + "]");
   }
-}
-
-time_t ScanIO_riegl_rgb::lastModified(const char* dir_path, const char* identifier)
-{
-  const char* suffixes[2] = { DATA_PATH_SUFFIX, NULL };
-  return lastModifiedHelper(dir_path, identifier, suffixes);
-}
-
-bool ScanIO_riegl_rgb::supports(IODataType type)
-{
-  return !!(type & (DATA_XYZ | DATA_RGB | DATA_REFLECTANCE));
 }
 
 std::function<bool (std::istream &data_file)> read_data(PointFilter& filter,
@@ -143,14 +120,15 @@ std::function<bool (std::istream &data_file)> read_data(PointFilter& filter,
 }
 
 
-void ScanIO_riegl_rgb::readScan(const char* dir_path, const char* identifier, PointFilter& filter, std::vector<double>* xyz, std::vector<unsigned char>* rgb, std::vector<float>* reflectance, std::vector<float>* temperature, std::vector<float>* amplitude, std::vector<int>* type, std::vector<float>* deviation)
+void ScanIO_riegl_rgb::readScan(const char* dir_path, const char* identifier, PointFilter& filter, std::vector<double>* xyz, std::vector<unsigned char>* rgb, std::vector<float>* reflectance, std::vector<float>* temperature, std::vector<float>* amplitude, std::vector<int>* type, std::vector<float>* deviation,
+               std::vector<double>* normal)
 {
     if(xyz == 0 && rgb == 0 && reflectance == 0)
         return;
 
     // error handling
     path data_path(dir_path);
-    data_path /= path(std::string(DATA_PATH_PREFIX) + identifier + DATA_PATH_SUFFIX);
+    data_path /= path(std::string(dataPrefix()) + identifier + dataSuffix());
     if (!open_path(data_path, read_data(filter, xyz, rgb, reflectance, temperature, amplitude, type, deviation)))
         throw std::runtime_error(std::string("There is no scan file for [") + identifier + "] in [" + dir_path + "]");
 }

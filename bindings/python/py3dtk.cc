@@ -555,6 +555,15 @@ class KDtreeWrapper : public KDtree
 		}
 };
 
+void openDirectoryWrapper(
+		bool scanserver,
+		const std::string& directory,
+		IOType type,
+		int start,
+		int end
+		) {
+	Scan::openDirectory(scanserver, directory, type, start, end);
+}
 
 bp::tuple calculateNormalWrapper(bp::list pts) {
 	size_t num_pts = bp::extract<std::size_t>(pts.attr("__len__")());
@@ -598,7 +607,7 @@ std::string float2hex(double val)
 	// 3 bytes  exponent
 	// 1 byte   NULL
 	// = 24 bytes maximum
-	int buflen = 24;
+	const int buflen = 24;
 	char buffer[buflen];
 	int ret = snprintf(buffer, buflen, "%a", val);
 	if (ret < 0 || ret >= buflen) {
@@ -675,7 +684,7 @@ BOOST_PYTHON_MODULE(py3dtk)
 		.value("LUM", Scan::LUM)
 		.value("ELCH", Scan::ELCH);
 
-	bp::def("openDirectory", Scan::openDirectory);
+	bp::def("openDirectory", openDirectoryWrapper);
 
 	bp::def("M4identity", pyM4identity);
 	bp::def("transform3", pytransform3);

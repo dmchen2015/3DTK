@@ -16,13 +16,6 @@
  */
 
 #include "scanio/scan_io_riegl_txt.h"
-#include "scanio/helper.h"
-
-#include <iostream>
-using std::cout;
-using std::cerr;
-using std::endl;
-#include <vector>
 
 #ifdef _MSC_VER
 #include <windows.h>
@@ -35,30 +28,25 @@ using namespace boost::filesystem;
 #include "slam6d/globals.icc"
 
 
-#define DATA_PATH_PREFIX "scan"
-#define DATA_PATH_SUFFIX ".txt"
-#define POSE_PATH_PREFIX "scan"
-#define POSE_PATH_SUFFIX ".dat"
+const char* ScanIO_riegl_txt::data_suffix = ".txt";
+const char* ScanIO_riegl_txt::pose_suffix = ".dat";
+IODataType ScanIO_riegl_txt::spec[] = { DATA_XYZ, DATA_XYZ, DATA_XYZ,
+            DATA_DUMMY, DATA_DUMMY, DATA_DUMMY, DATA_REFLECTANCE,
+            DATA_TERMINATOR };
+ScanDataTransform_riegl scanio_riegl_txt_tf;
+ScanDataTransform& ScanIO_riegl_txt::transform2uos = scanio_riegl_txt_tf;
 
-
-std::list<std::string> ScanIO_riegl_txt::readDirectory(const char* dir_path,
-                                                       unsigned int start,
-                                                       unsigned int end)
-{
-    const char* suffixes[2] = { DATA_PATH_SUFFIX, NULL };
-    return readDirectoryHelper(dir_path, start, end, suffixes);
-}
 
 void ScanIO_riegl_txt::readPose(const char* dir_path,
                                 const char* identifier,
                                 double* pose)
 {
   unsigned int i;
-  
+
   path pose_path(dir_path);
-  pose_path /= path(std::string(POSE_PATH_PREFIX)
+  pose_path /= path(std::string(posePrefix())
                     + identifier
-                    + POSE_PATH_SUFFIX);
+                    + poseSuffix());
   if(!exists(pose_path))
     throw std::runtime_error(std::string("There is no pose file for [")
                              + identifier + "] in [" + dir_path + "]");
@@ -67,7 +55,7 @@ void ScanIO_riegl_txt::readPose(const char* dir_path,
   ifstream pose_file(pose_path);
     double rPos[3], rPosTheta[16];
     double inMatrix[16], tMatrix[16];
-    
+
     if (pose_file.fail()) {
       throw std::runtime_error(std::string("Pose file could not be opened for [")
                                + identifier + "] in [" + dir_path + "]");
@@ -76,7 +64,7 @@ void ScanIO_riegl_txt::readPose(const char* dir_path,
     for (i = 0; i < 16; ++i)
       pose_file >> inMatrix[i];
     pose_file.close();
-    
+
     if (pose_file.fail()) {
       throw std::runtime_error(std::string("Pose file could not be read for [")
                                + identifier + "] in [" + dir_path + "]");
@@ -99,26 +87,15 @@ void ScanIO_riegl_txt::readPose(const char* dir_path,
     tMatrix[13] = inMatrix[11];
     tMatrix[14] = inMatrix[3];
     tMatrix[15] = inMatrix[15];
-    
+
     Matrix4ToEuler(tMatrix, rPosTheta, rPos);
-    
+
     pose[0] = 100*rPos[0];
     pose[1] = 100*rPos[1];
     pose[2] = 100*rPos[2];
     pose[3] = rPosTheta[0];
     pose[4] = rPosTheta[1];
     pose[5] = rPosTheta[2];
-}
-
-time_t ScanIO_riegl_txt::lastModified(const char* dir_path, const char* identifier)
-{
-  const char* suffixes[2] = { DATA_PATH_SUFFIX, NULL };
-  return lastModifiedHelper(dir_path, identifier, suffixes);
-}
-
-bool ScanIO_riegl_txt::supports(IODataType type)
-{
-  return !!(type & (DATA_XYZ | DATA_REFLECTANCE));
 }
 
 std::function<bool (std::istream &data_file)> read_data(PointFilter& filter,
@@ -134,7 +111,12 @@ std::function<bool (std::istream &data_file)> read_data(PointFilter& filter,
         }
 
         // reserve enough space for faster reading
-        xyz->reserve(3*count);
+        try {
+            xyz->reserve(3*count);
+        } catch(...) {
+            std::cerr << "failed allocating space for " << count << " points" << std::endl;
+            throw;
+        }
         if (reflectance != nullptr) {
             reflectance->reserve(count);
         }
@@ -158,16 +140,17 @@ void ScanIO_riegl_txt::readScan(const char* dir_path,
                                 std::vector<float>* temperature,
                                 std::vector<float>* amplitude,
                                 std::vector<int>* type,
-                                std::vector<float>* deviation)
+                                std::vector<float>* deviation,
+                                std::vector<double>* normal)
 {
     if(xyz == 0 && reflectance == 0)
         return;
 
     // error handling
     path data_path(dir_path);
-    data_path /= path(std::string(DATA_PATH_PREFIX)
+    data_path /= path(std::string(dataPrefix())
             + identifier
-            + DATA_PATH_SUFFIX);
+            + dataSuffix());
     if (!open_path(data_path, read_data(filter, xyz, rgb, reflectance, temperature, amplitude, type, deviation)))
         throw std::runtime_error(std::string("There is no scan file for [")
                 + identifier + "] in [" + dir_path + "]");

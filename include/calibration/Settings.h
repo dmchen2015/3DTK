@@ -19,8 +19,6 @@
 # define _CRT_SECURE_NO_WARNINGS
 #endif
 
-using namespace cv;
-
 class Settings
 {
 public:
@@ -29,7 +27,7 @@ public:
     enum InputType {INVALID, CAMERA, VIDEO_FILE, IMAGE_LIST};
     enum PatternType {APRIL_2D, APRIL_3D};
 
-    void write(FileStorage& fs) const                        //Write serialization for this class
+    void write(cv::FileStorage& fs) const                        //Write serialization for this class
     {
         fs << "{" << "BoardSize_Width"  << boardSize.width
         << "BoardSize_Height" << boardSize.height
@@ -51,7 +49,7 @@ public:
         << "Input" << input
         << "}";
     }
-    void read(const FileNode& node)                          //Read serialization for this class
+    void read(const cv::FileNode& node)                          //Read serialization for this class
     {
         node["BoardSize_Width" ] >> boardSize.width;
         node["BoardSize_Height"] >> boardSize.height;
@@ -123,9 +121,9 @@ public:
         }
 
         flag = 0;
-        if(calibFixPrincipalPoint) flag |= CV_CALIB_FIX_PRINCIPAL_POINT;
-        if(calibZeroTangentDist)   flag |= CV_CALIB_ZERO_TANGENT_DIST;
-        if(aspectRatio)            flag |= CV_CALIB_FIX_ASPECT_RATIO;
+        if(calibFixPrincipalPoint) flag |= cv::CALIB_FIX_PRINCIPAL_POINT;
+        if(calibZeroTangentDist)   flag |= cv::CALIB_ZERO_TANGENT_DIST;
+        if(aspectRatio)            flag |= cv::CALIB_FIX_ASPECT_RATIO;
 
 
         calibrationPattern = NOT_EXISTING;
@@ -140,17 +138,23 @@ public:
         atImageList = 0;
 
     }
-    Mat nextImage()
+    cv::Mat nextImage()
     {
-        Mat result;
+        cv::Mat result;
         if( inputCapture.isOpened() )
         {
-            Mat view0;
+            cv::Mat view0;
             inputCapture >> view0;
             view0.copyTo(result);
         }
         else if( atImageList < (int)imageList.size() )
-            result = imread(imageList[atImageList++], CV_LOAD_IMAGE_COLOR);
+            result = cv::imread(imageList[atImageList++],
+#if CV_MAJOR_VERSION > 2
+					cv::ImreadModes::IMREAD_COLOR
+#else
+					CV_LOAD_IMAGE_COLOR
+#endif
+					);
 
         return result;
     }
@@ -158,19 +162,19 @@ public:
     static bool readStringList( const std::string& filename, std::vector<std::string>& l )
     {
         l.clear();
-        FileStorage fs(filename, FileStorage::READ);
+        cv::FileStorage fs(filename, cv::FileStorage::READ);
         if( !fs.isOpened() )
             return false;
-        FileNode n = fs.getFirstTopLevelNode();
-        if( n.type() != FileNode::SEQ )
+        cv::FileNode n = fs.getFirstTopLevelNode();
+        if( n.type() != cv::FileNode::SEQ )
             return false;
-        FileNodeIterator it = n.begin(), it_end = n.end();
+        cv::FileNodeIterator it = n.begin(), it_end = n.end();
         for( ; it != it_end; ++it )
             l.push_back((std::string)*it);
         return true;
     }
 public:
-    Size boardSize;            // The size of the board -> Number of items by width and height
+    cv::Size boardSize;            // The size of the board -> Number of items by width and height
     Pattern calibrationPattern;// One of the Chessboard, circles, or asymmetric circle pattern
     float squareSize;          // The size of a square in your defined unit (point, millimeter,etc).
     int nrFrames;              // The number of frames to use from the input for calibration
@@ -190,7 +194,7 @@ public:
     int cameraID;
     std::vector<std::string> imageList;
     int atImageList;
-    VideoCapture inputCapture;
+    cv::VideoCapture inputCapture;
     InputType inputType;
     bool goodInput;
     int flag;
@@ -202,12 +206,10 @@ public:
     int threads;
     bool debug;
     bool refine_edges;
-    bool refine_decodes;
-    bool refine_pose;
     std::string tagFamily;
 
     //pattern.xml Path
-    std::string patternPath;
+    std::vector<std::string> patternPaths;
     //picture path
     std::vector<std::string> picturePath;
     PatternType pattern;
@@ -221,7 +223,7 @@ public:
     cv::Mat estCameraMatrix;
     cv::Mat estDistCoeff;
     bool estFromInput;
-    Size imageSize;
+    cv::Size imageSize;
 
 
 private:

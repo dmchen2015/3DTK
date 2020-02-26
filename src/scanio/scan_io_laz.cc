@@ -79,7 +79,8 @@ void ScanIO_laz::readScan(const char* dir_path,
 			  std::vector<float>* temperature,
 			  std::vector<float>* amplitude,
 			  std::vector<int>* type,
-			  std::vector<float>* deviation)
+        std::vector<float>* deviation,
+        std::vector<double>* normal)
 {
   // error handling
   path data_path(dir_path);
@@ -95,17 +96,17 @@ void ScanIO_laz::readScan(const char* dir_path,
   // open data file
   LASreadOpener lasreadopener;
   lasreadopener.set_file_name(data_path.string().c_str());
-  
+
   //check and read options file
   path options_path(dir_path);
-  options_path /= path(std::string(DATA_PATH_PREFIX) + identifier + LAS_OPTIONS); 
-  
+  options_path /= path(std::string(DATA_PATH_PREFIX) + identifier + LAS_OPTIONS);
+
   if(exists(options_path)) {
-  
+
     std::ifstream opt_in;
     opt_in.open(options_path.c_str());
-  
-    std::string opts; 
+
+    std::string opts;
     getline(opt_in, opts);
     opt_in.close();
     opt_in.clear();
@@ -119,7 +120,7 @@ void ScanIO_laz::readScan(const char* dir_path,
     }
     delete[] opts_array;
   }
-  
+
   LASreader* lasreader = lasreadopener.open();
 
   while (lasreader->read_point()) {
@@ -159,7 +160,7 @@ void ScanIO_laz::readScan(const char* dir_path,
       }
     }
   }
-  
+
   lasreader->close();
   delete lasreader;
 }

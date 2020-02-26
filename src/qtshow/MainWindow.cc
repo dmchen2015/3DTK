@@ -10,9 +10,9 @@
 
 #include "show/program_options.h"
 
-MainWindow::MainWindow(const dataset_settings& ds, const window_settings& ws, QWidget *parent, Qt::WindowFlags flags)
+MainWindow::MainWindow(const dataset_settings& dss, const window_settings& ws, const display_settings& ds, QWidget *parent, Qt::WindowFlags flags)
   : QMainWindow(parent, flags)
-  , ds(ds)
+  , dss(dss), ds(ds)
 {
   if (!ws.nogui) {
     setupUi(this);
@@ -53,7 +53,7 @@ MainWindow::MainWindow(const dataset_settings& ds, const window_settings& ws, QW
 
     // Set initial state file path
     QDir curDir(QDir::current());
-    lineEditStateFile->setText(curDir.canonicalPath() + "/" + QString::fromStdString(ds.input_directory) + "config.ini");
+    lineEditStateFile->setText(curDir.canonicalPath() + "/" + QString::fromStdString(dss.data_source) + "config.ini");
     lineEditSelectionFile->setText(curDir.canonicalPath() + "/selected.3d");
   } else {
     glWidget = new GLWidget(this);
@@ -78,22 +78,22 @@ void MainWindow::updateRecentDirectoriesMenu(std::vector<std::string> directorie
 }
 
 void MainWindow::openScanDirectory() {
-  ScanPicker sp(ds, this);
+  ScanPicker sp(dss, this);
   if (sp.exec())
-    emit scanDirectoryOpened(ds);
+    emit scanDirectoryOpened(dss);
 }
 
 void MainWindow::openRecentDirectory() {
   QAction *action = qobject_cast<QAction *>(sender());
   if (action) {
-    ds.input_directory = action->data().toString().toStdString();
-    emit scanDirectoryOpened(ds);
+    dss.data_source = action->data().toString().toStdString();
+    emit scanDirectoryOpened(dss);
   }
 }
 
 std::string recent_directory_path() {
   std::string config_home;
-#ifndef _MSC_VER
+#if __unix__ || (__APPLE__ && __MACH__)
   // in $XDG_CONFIG_HOME/3dtk/qtshow-recent.txt
   char *home_c = getenv("HOME");
   char *config_home_c = getenv("XDG_CONFIG_HOME");
@@ -102,9 +102,11 @@ std::string recent_directory_path() {
   } else {
     config_home = std::string(home_c) + "/.config";
   }
-#else
+#elif _WIN32
   // in %APPDATA%/3dtk/qtshow-recent.txt
   config_home = std::string(getenv("APPDATA"));
+#else
+#error "OS may not be supported"
 #endif
 
   return (config_home + "/3dtk/qtshow-recent.txt").c_str();
@@ -113,11 +115,11 @@ std::string recent_directory_path() {
 void MainWindow::addRecentDirectory() {
   std::vector<std::string> directories = loadRecentDirectories();
 
-  auto duplicate = std::find(directories.begin(), directories.end(), ds.input_directory);
+  auto duplicate = std::find(directories.begin(), directories.end(), dss.data_source);
   if (duplicate != directories.end()) {
     directories.erase(duplicate);
   }
-  directories.insert(directories.begin(), ds.input_directory);
+  directories.insert(directories.begin(), dss.data_source);
 
   std::ofstream directories_file(recent_directory_path());
 
@@ -294,15 +296,15 @@ void MainWindow::saveStates()
   out << "pointsize=" << spinBoxPointSize->cleanText().toUtf8().constData() << endl;
   out << "colormap=" << comboBoxColorMap->currentText().toLower().toUtf8().constData() << endl;
   out << "scanscolored=" << comboBoxColorType->currentIndex() << endl;
-  out << "max=" << ds.distance_filter.max << endl;
-  out << "min=" << ds.distance_filter.min << endl;
+  out << "max=" << dss.distance_filter.max << endl;
+  out << "min=" << dss.distance_filter.min << endl;
 }
 
 void MainWindow::loadStates()
 {
   using namespace boost::program_options;
-  
-  bool advanced, noPoints, noCameras, noPath, noPoses, noFog;
+
+  bool advanced, noPoints, noCameras, noPath, noPoses, noFog, hide_classLabels;
   float fov, fogDensity;
   int viewmode, fogType, pointsize;
   ShowColormap colormap;
@@ -313,7 +315,8 @@ void MainWindow::loadStates()
   bool nogui, invertMouseX, invertMouseY, color, noAnimColor, captureMouse, hideWidgets;
   float fps, colormin, colormax;
   double scale, reduce;
-  int distMin, distMax, octree, stepsize;
+  double distMin, distMax;
+  int octree, stepsize;
   Color bgcolor;
   WindowDimensions dimensions;
 
@@ -325,7 +328,7 @@ void MainWindow::loadStates()
   options_description display_options("Display options");
   setDisplayOptions(scale, fov, viewmode, noPoints, noCameras, noPath, noPoses,
 		    noFog, fogType, fogDensity, position, rotation,
-		    pointsize, display_options);
+		    pointsize, hide_classLabels, display_options);
 
   options_description color_options("Point coloring");
   setColorOptions(bgcolor, color, colormap, colormin, colormax,
@@ -346,37 +349,37 @@ void MainWindow::loadStates()
   QString filePath = lineEditStateFile->text();
   QFileInfo checkFile(filePath);
   if(checkFile.exists() && !checkFile.isFile()) return;
-  
+
   std::ifstream config_file(filePath.toLatin1().data());
   if(config_file) {
     store(parse_config_file(config_file, visible_options), vm);
   }
   notify(vm);
-  
+
   doubleSpinBoxZoom->setValue(fov);
-  
+
   buttonGroupViewMode->buttonClicked(viewmode);
   buttonGroupViewMode->button(viewmode)->setChecked(true);
-  
+
   checkDrawPoints->setChecked(!noPoints);
   checkDrawCameras->setChecked(!noCameras);
   checkDrawPath->setChecked(!noPath);
   checkDrawPoses->setChecked(!noPoses);
-  
+
   comboBoxFogType->setCurrentIndex(fogType);
-  
+
   doubleSpinBoxFogDensity->setValue(fogDensity);
-  
+
   X = position.x; Y = position.y; Z = position.z;
-  
+
   QuatToMouseRot(rotation, mouseRotX, mouseRotY, mouseRotZ);
   glWidget->cameraChanged();
-  
+
   spinBoxPointSize->setValue(pointsize);
-  
+
   comboBoxColorMap->setCurrentIndex(static_cast<int>(colormap));
   comboBoxColorType->setCurrentIndex(scansColored);
-  
+
   glWidget->update();
 }
 
@@ -392,7 +395,7 @@ void MainWindow::saveSelectedPoints()
 {
   QString fileName = lineEditSelectionFile->text();
   selection_file_name = fileName.toLatin1().data();
-  
+
   saveSelection(0);
 }
 

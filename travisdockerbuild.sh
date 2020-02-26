@@ -2,13 +2,17 @@
 
 set -eu
 
-if [ "$#" -ne 2 ]; then
-	echo "usage: $0 derivative distribution" >&2
+if [ "$#" -ne 2 ] && [ "$#" -ne 3 ]; then
+	echo "usage: $0 derivative distribution [compiler]" >&2
 	exit 1
 fi
 
 DERIV=$1
 DIST=$2
+CC=
+if [ "$#" -gt 2 ]; then
+	CC=$3
+fi
 
 case "$DERIV" in
 	debian)
@@ -26,18 +30,27 @@ case "$DERIV" in
 		exit 1
 esac
 
-CMAKEOPTS="-DCMAKE_VERBOSE_MAKEFILE=ON"
+CMAKEOPTS="-DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_VERBOSE_MAKEFILE=ON"
 
 case "$DIST" in
-	jessie)
-		CMAKEOPTS="$CMAKEOPTS -DWITH_GLFW=OFF -DWITH_QT=OFF"
-		;;
-	trusty)
-		CMAKEOPTS="$CMAKEOPTS -DWITH_CGAL=OFF -DWITH_GLFW=OFF -DWITH_QT=OFF -DWITH_PYTHON=OFF -DWITH_LIBZIP=OFF -DWITH_MESH=OFF"
-		;;
-	sid)
+	buster|bullseye|sid)
 		CMAKEOPTS="$CMAKEOPTS -DWITH_ROS=ON"
+		# if buster or unstable are run inside Docker, then generating
+		# moc_GLWidget.cpp will fail with:
+		# standard input:0: Note: No relevant classes found. No output generated.
+		# this is because under docker, the statx system call is not
+		# supported
+		# a workaround is to install an updated libseccomp library
+		arch=$(dpkg --print-architecture)
+		wget https://launchpad.net/ubuntu/+archive/primary/+files/libseccomp2_2.4.1-0ubuntu0.16.04.2_$arch.deb
+		sudo apt-get install ./libseccomp2_2.4.1-0ubuntu0.16.04.2_$arch.deb
 		;;
+	xenial|bionic|stretch)
+		# nothing to do
+		;;
+	*)
+		echo "unknown distribution: $DIST" >&2
+		exit 1
 esac
 
 cat > Dockerfile <<EOF
@@ -51,18 +64,24 @@ RUN echo 'Acquire::EnableSrvRecords "false";' > /etc/apt/apt.conf.d/90srvrecords
 EOF
 
 case "$DIST" in
-	jessie|stretch|buster)
+	stretch|buster)
 		cat >> Dockerfile <<EOF
 RUN echo "deb $MIRROR $DIST-updates $COMP" >> /etc/apt/sources.list
 RUN echo "deb $SECMIRROR $DIST/updates $COMP" >> /etc/apt/sources.list
 EOF
 		;;
-	trusty|xenial|bionic)
+	xenial|bionic)
 		cat >> Dockerfile <<EOF
 RUN echo "deb $MIRROR $DIST-updates $COMP" >> /etc/apt/sources.list
 RUN echo "deb $SECMIRROR $DIST-security $COMP" >> /etc/apt/sources.list
 EOF
 		;;
+	sid|bullseye)
+		# nothing to do
+		;;
+	*)
+		echo "unknown distribution: $DIST" >&2
+		exit 1
 esac
 
 TAG="3dtk.docker.$DERIV.$DIST"
@@ -74,9 +93,6 @@ docker build --tag="$TAG" .
 echo "travis_fold:end:docker_build"
 
 GENERATOR=Ninja
-if [ "$DIST" = "trusty" ]; then
-	GENERATOR="Unix Makefiles"
-fi
 APT="apt-get install --yes --no-install-recommends -o Debug::pkgProblemResolver=yes"
 
 {
@@ -88,23 +104,16 @@ APT="apt-get install --yes --no-install-recommends -o Debug::pkgProblemResolver=
 	echo "cat /etc/apt/sources.list";
 	echo "apt-get update";
 	echo "apt-get dist-upgrade --yes";
-	echo "$APT equivs";
-	if [ "$DIST" != "trusty" ]; then
-		echo "$APT ninja-build";
+	echo "$APT equivs ninja-build";
+	if [ -z "$CC" ]; then
+		echo "equivs-build doc/equivs/control.$DERIV.$DIST";
+	else
+		echo "equivs-build doc/equivs/control.$DERIV.$DIST.$CC";
 	fi
-	echo "equivs-build doc/equivs/control.$DERIV.$DIST";
-	case "$DIST" in
-		trusty|jessie)
-			echo "dpkg --install --force-depends ./3dtk-build-deps_1.0_all.deb";
-			echo "$APT --fix-broken";
-			;;
-		*)
-			echo "$APT ./3dtk-build-deps_1.0_all.deb";
-			;;
-	esac
+	echo "$APT ./3dtk-build-deps_1.0_all.deb";
 	echo "echo travis_fold:end:docker_setup";
 	echo "mkdir .build";
 	echo "cmake -H. -B.build $CMAKEOPTS -G \"$GENERATOR\"";
-	echo "cmake --build .build";
-	echo "CTEST_OUTPUT_ON_FAILURE=true cmake --build .build --target test";
+	echo "cmake --build .build --config RelWithDebInfo";
+	echo "CTEST_OUTPUT_ON_FAILURE=true cmake --build .build --config RelWithDebInfo --target test";
 } | docker run --interactive --rm "$TAG" sh -

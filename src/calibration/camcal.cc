@@ -14,6 +14,7 @@
 #include <random>
 
 namespace po = boost::program_options;
+using namespace cv;
 
 
 void createA4File(std::string pfad){
@@ -78,7 +79,7 @@ int main(int argc, const char * argv[]) {
     settings.pattern = Settings::APRIL_3D;
     settings.decimate =1;
     settings.debug = false;
-    settings.patternPath = "";
+    settings.patternPaths = std::vector<std::string>();
     std::string dirpath = "";
     std::string dateiendung = "";
     std::string xmlFileName = "";
@@ -108,7 +109,7 @@ int main(int argc, const char * argv[]) {
                 ("threads,t", po::value<int>(&settings.threads)->default_value(4),
                  "set threads count for AprilTag detection")
 
-                ("blur", po::value<float>(&settings.blur)->default_value((float) 0.8), "set blur level for AprilTag")
+                ("blur", po::value<float>(&settings.blur)->default_value((float) 0.0), "set blur level for AprilTag")
 
                 ("pictures-for-estimation,e",
                  po::value<int>(&settings.picturesForDstimateInitial3DCameraMatrix)->default_value(40),
@@ -119,19 +120,13 @@ int main(int argc, const char * argv[]) {
                 ("refine-edges", po::value<bool>(&settings.refine_edges)->default_value(true),
                  "set AprilTag refine-edges")
 
-                ("refine-decodes", po::value<bool>(&settings.refine_decodes)->default_value(true),
-                 "set AprilTag refine-decodes")
-
-                ("refine-pose", po::value<bool>(&settings.refine_pose)->default_value(true),
-                 "set AprilTag refine-pose")
-
                 ("tagFamily", po::value<std::string>(&settings.tagFamily)->default_value("tag36h11"), "set AprilTag TagFamily")
 
                 ("path-pictures,P", po::value<std::string>(&dirpath), "set path to pictures; if use FROM_FILES, path to this files")
 
                 ("read-pictures-form-file,F", po::value<std::string>(&dirpath), "read pictures filename form .txt file")
 
-                ("path-pattern,S", po::value<std::string>(&settings.patternPath), "set path to file with pattern coordinates")
+                ("path-pattern,S", po::value<std::vector<std::string> >(&settings.patternPaths)->multitoken(), "set path to file with pattern coordinates")
 
                 ("picturetype,T", po::value<std::string>(&dateiendung), "default read all files with png, jpeg, jpg, jpe, tif, tiff, ppm, pgm, bpm")
 
@@ -206,7 +201,7 @@ int main(int argc, const char * argv[]) {
         std::cout << "not implemented" << std::endl;
         return 1;
     }
-    if(settings.calibrationPattern == Settings::APRILTAG && settings.patternPath.length() == 0 && (!onlydetect || extrinsic)){
+    if(settings.calibrationPattern == Settings::APRILTAG && settings.patternPaths.size() == 0 && (!onlydetect || extrinsic)){
         std::cout << "for calibration with APRILTAGS need pattern file, use --help for more information" <<std::endl;
         return 1;
     }

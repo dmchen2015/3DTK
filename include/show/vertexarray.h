@@ -7,7 +7,7 @@
 #ifndef __VERTEXARRAY_H__
 #define __VERTEXARRAY_H__
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 #include <windows.h>
 #endif
 
@@ -27,7 +27,7 @@ class vertexArray
 public:
   vertexArray(int _numPointsToRender);
   ~vertexArray();
-  
+
   GLfloat* array;
   GLint    numPointsToRender;
   GLuint   name;

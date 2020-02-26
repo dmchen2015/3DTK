@@ -73,16 +73,62 @@ void BasicScan::openDirectory(const std::string& path,
 #endif //WITH_METRICS
 }
 
+void BasicScan::openDirectory(dataset_settings& dss
+#ifdef WITH_MMAP_SCAN
+  , boost::filesystem::path cache
+#endif
+)
+{
+#ifdef WITH_METRICS
+  Timer t = ClientMetric::read_scan_time.start();
+#endif //WITH_METRICS
+
+  if (dss.data_type == dataset_settings::MULTI_SRCS) {
+    std::cout << "Getting data from multiple sources..." << std::endl;
+    //int start = dss.scan_numbers.min;
+    //int end = dss.scan_numbers.max;
+    //if (end == -1) end = dss.subsets.size() - 1;
+    //for (int i = start; i <= end; ++i) {
+    for (int i = 0; i < dss.subsets.size(); ++i) {
+        BasicScan::openDirectory(*(dss.subsets[i]));
+    }
+  }
+  else {
+    // create an instance of ScanIO
+    ScanIO* sio = ScanIO::getScanIO(dss.format);
+
+    // query available scans in the directory from the ScanIO
+    std::list<std::string> identifiers(sio->readDirectory(dss));
+
+    Scan::allScans.reserve(Scan::allScans.size() + identifiers.size());
+
+    // for each identifier, create a scan
+    for (std::list<std::string>::iterator it = identifiers.begin();
+      it != identifiers.end();
+      ++it)
+    {
+      Scan::allScans.push_back(new BasicScan(dss, *it
+#ifdef WITH_MMAP_SCAN
+        , cache
+#endif
+      ));
+    }
+  }
+#ifdef WITH_METRICS
+  ClientMetric::read_scan_time.end(t);
+#endif //WITH_METRICS
+}
+
 void BasicScan::closeDirectory()
 {
   // clean up the scan vector
 
   // avoiding "Expression: vector iterators incompatible" on empty allScans-vector
   if (Scan::allScans.size()){
-    for(ScanVector::iterator it = Scan::allScans.begin(); 
-      it != Scan::allScans.end(); 
+    for(ScanVector::iterator it = Scan::allScans.begin();
+      it != Scan::allScans.end();
       ++it) {
-        delete *it; 
+        delete *it;
         *it = 0;
     }
     Scan::allScans.clear();
@@ -135,11 +181,11 @@ BasicScan::BasicScan(double *_rPos,
   // write original pose matrix
   EulerToMatrix4(rPos, rPosTheta, transMatOrg);
 
-  // initialize transform matrices from the original one, 
+  // initialize transform matrices from the original one,
   // could just copy transMatOrg to transMat instead
   transformMatrix(transMatOrg);
 
-  // reset the delta align matrix to represent only the transformations 
+  // reset the delta align matrix to represent only the transformations
   // after local-to-global (transMatOrg) one
   M4identity(dalignxf);
   PointFilter filter;
@@ -168,11 +214,11 @@ BasicScan::BasicScan(double *_rPos,
   // write original pose matrix
   EulerToMatrix4(rPos, rPosTheta, transMatOrg);
 
-  // initialize transform matrices from the original one, 
+  // initialize transform matrices from the original one,
   // could just copy transMatOrg to transMat instead
   transformMatrix(transMatOrg);
 
-  // reset the delta align matrix to represent only the transformations 
+  // reset the delta align matrix to represent only the transformations
   // after local-to-global (transMatOrg) one
   M4identity(dalignxf);
   PointFilter filter;
@@ -186,14 +232,14 @@ BasicScan::BasicScan(double *_rPos,
     filter.setRangeMutator(m_range_mutation);
   if(m_filter_scale_set)
     filter.setScale(m_filter_scale);
-  
+
   // check if we can create a large enough array. The maximum size_t on 32 bit
   // is around 4.2 billion which is too little for scans with more than 179
   // million points
   if (sizeof(size_t) == 4 && points.size() > ((size_t)(-1))/sizeof(double)/3) {
       throw std::runtime_error("Insufficient size of size_t datatype");
   }
-  double* data = reinterpret_cast<double*>(create("xyz", 
+  double* data = reinterpret_cast<double*>(create("xyz",
                      sizeof(double) * 3 * points.size()).get_raw_pointer());
   int tmp = 0;
   for(size_t i = 0; i < points.size(); ++i) {
@@ -203,8 +249,8 @@ BasicScan::BasicScan(double *_rPos,
   }
 }
 
-BasicScan::BasicScan(const std::string& path, 
-                     const std::string& identifier, 
+BasicScan::BasicScan(const std::string& path,
+                     const std::string& identifier,
                      IOType type
 #ifdef WITH_MMAP_SCAN
                      , boost::filesystem::path cache
@@ -214,13 +260,17 @@ BasicScan::BasicScan(const std::string& path,
 {
   init();
 
+  int pos = identifier.find_first_of(':');
+  std::string first_line_identifier = identifier.substr(0, pos);
+
   // request pose from file
   double euler[6];
   ScanIO* sio = ScanIO::getScanIO(m_type);
   if (Scan::continue_processing) {
-    sio->readPoseFromFrames(m_path.c_str(), m_identifier.c_str(), euler);    
-  } else {
-    sio->readPose(m_path.c_str(), m_identifier.c_str(), euler, &m_timestamp);
+    sio->readPoseFromFrames(m_path.c_str(), first_line_identifier.c_str(), euler);
+  }
+  else {
+    sio->readPose(m_path.c_str(), first_line_identifier.c_str(), euler, &m_timestamp);
   }
   rPos[0] = euler[0];
   rPos[1] = euler[1];
@@ -232,7 +282,7 @@ BasicScan::BasicScan(const std::string& path,
   // write original pose matrix
   EulerToMatrix4(euler, &euler[3], transMatOrg);
 
-  // initialize transform matrices from the original one, 
+  // initialize transform matrices from the original one,
   // could just copy transMatOrg to transMat instead
   transformMatrix(transMatOrg);
 
@@ -247,9 +297,9 @@ BasicScan::BasicScan(const std::string& path,
 
 BasicScan::~BasicScan()
 {
-  for (std::map<std::string, std::pair<unsigned char*, 
-         size_t>>::iterator it = m_data.begin(); 
-       it != m_data.end(); 
+  for (std::map<std::string, std::pair<unsigned char*,
+         size_t>>::iterator it = m_data.begin();
+       it != m_data.end();
        it++) {
 #ifdef WITH_MMAP_SCAN
     // depending on whether the data was backed by an mmap-ed file or by
@@ -309,7 +359,7 @@ void BasicScan::setHeightFilter(double top, double bottom)
 
 void BasicScan::setCustomFilter(std::string& cFiltStr)
 {
-  customFilterStr = cFiltStr;	
+  customFilterStr = cFiltStr;
   m_filter_custom_set = true;
 }
 
@@ -346,6 +396,7 @@ void BasicScan::get(IODataType types)
   std::vector<float> amplitude;
   std::vector<int> type;
   std::vector<float> deviation;
+  std::vector<double> normal;
 
   PointFilter filter;
   if(m_filter_range_set)
@@ -359,8 +410,15 @@ void BasicScan::get(IODataType types)
   if(m_filter_scale_set)
     filter.setScale(m_filter_scale);
 
+  std::string identifiers = m_identifier;
+  std::string current_identifier;
+  size_t pos = identifiers.find_first_of(';');
+  do {
+    current_identifier = identifiers.substr(0, pos);
+    if (pos != std::string::npos) identifiers = identifiers.substr(pos + 1);
+    else identifiers = "";
   sio->readScan(m_path.c_str(),
-                m_identifier.c_str(),
+      current_identifier.c_str(),
                 filter,
                 &xyz,
                 &rgb,
@@ -368,7 +426,9 @@ void BasicScan::get(IODataType types)
                 &temperature,
                 &amplitude,
                 &type,
-                &deviation);
+                &deviation,
+                &normal);
+  } while ((pos = identifiers.find_first_of(';')) != std::string::npos || !identifiers.empty() );
 
   // for each requested and filled data vector,
   // allocate and write contents to their new data fields
@@ -452,6 +512,19 @@ void BasicScan::get(IODataType types)
                       sizeof(float) * deviation.size()).get_raw_pointer());
     for(size_t i = 0; i < deviation.size(); ++i) data[i] = deviation[i];
   }
+  if(types & DATA_NORMAL && !normal.empty()) {
+    // check if we can create a large enough array. The maximum size_t on 32 bit
+    // is around 4.2 billion which is too little for scans with more than 537
+    // million points
+    if (sizeof(size_t) == 4 && normal.size() > ((size_t)(-1))/sizeof(double)) {
+            throw std::runtime_error("Insufficient size of size_t datatype");
+    }
+    double* data = reinterpret_cast<double*>(create("normal",
+                      sizeof(double) * normal.size()).get_raw_pointer());
+    for(size_t i = 0; i < normal.size(); ++i) data[i] = normal[i];
+  }
+
+
 }
 
 DataPointer BasicScan::get(const std::string& identifier)
@@ -484,9 +557,13 @@ DataPointer BasicScan::get(const std::string& identifier)
                 get(DATA_DEVIATION);
               else
                 // normals on demand
-                if (identifier == "normal")
-                  calcNormalsOnDemand();
-                else
+                if (identifier == "normal") {
+                  if(supportsNormals(m_type)) {
+                    get(DATA_NORMAL);
+                  } else {
+                    calcNormalsOnDemand();
+                  }
+                } else
                   // reduce on demand
                   if (identifier == "xyz reduced")
                     calcReducedOnDemand();
@@ -787,7 +864,10 @@ BOctTree<float>* BasicScan::convertScanToShowOcttree()
 
 size_t BasicScan::readFrames()
 {
-  std::string filename = m_path + "scan" + m_identifier + ".frames";
+  int pos = m_identifier.find_first_of(':');
+  std::string first_line_identifier = m_identifier.substr(0, pos);
+
+  std::string filename = m_path + "scan" + first_line_identifier + ".frames";
   std::string line;
   std::ifstream file(filename.c_str());
   // clear frame vector here to allow reloading without (old) duplicates

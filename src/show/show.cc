@@ -23,7 +23,11 @@ void saveImageAndExit(int dummy)
 {
 	// set pointmode to 1 to enforce rendering of all visible points
 	pointmode = 1;
-	saveImage(0);
+	if (screenshot_filename.empty()) {
+		saveImage(0);
+	} else {
+		saveImageAt(screenshot_filename);
+	}
 	exit(0);
 }
 
@@ -36,21 +40,22 @@ void saveImageAndExit(int dummy)
 int main(int argc, char **argv)
 {
   setSignalHandling();
-  
+
   glutInit(&argc, argv);
 
-  dataset_settings ds;
+  dataset_settings dss;
   window_settings ws;
-  
+  display_settings ds;
+
   try {
-    parse_args(argc, argv, ds, ws);
+    parse_args(argc, argv, dss, ws, ds);
   } catch (std::exception& e) {
     std::cerr << "Error while parsing settings: " << e.what() << std::endl;
     exit(1);
   }
 
-  initShow(ds, ws);
   initScreenWindow();
+  initShow(dss, ws, ds);
 
   if (!nogui && !takescreenshot)
     newMenu();
@@ -88,7 +93,7 @@ void updateViewModeControls() {
   }
 }
 
-  
+
 void updateControls() {
   glui1->sync_live();
   glui1->show();
@@ -105,7 +110,7 @@ void checkForInterrupt() {
 }
 bool isInterrupted() {
 #ifndef __APPLE__
-  glutMainLoopEvent(); 
+  glutMainLoopEvent();
 #endif
   glutSetWindow(window_id);
   return interrupted;

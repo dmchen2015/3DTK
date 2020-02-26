@@ -28,6 +28,11 @@ GLWidget::GLWidget(QWidget *parent)
   idleTimer->start();
 }
 
+GLWidget::~GLWidget()
+{
+    callbacks::glut::quit();
+}
+
 void GLWidget::initializeGL() {
   initializeOpenGLFunctions();
   load_url_texture();
@@ -202,6 +207,21 @@ void GLWidget::setFullscreen(bool fullscreenWanted) {
 
 void GLWidget::setDrawPoints(bool drawPoints) {
   show_points = drawPoints;
+  update();
+}
+
+void GLWidget::setDrawAllPoints(int allPoints) {
+  switch(allPoints) {
+    case 0:
+      pointmode = -1;
+      break;
+    case 1:
+      pointmode =  0;
+      break;
+    case 2:
+      pointmode =  1;
+      break;
+  }
   update();
 }
 

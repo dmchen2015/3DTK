@@ -8,6 +8,7 @@
 #include <map>
 
 #include "slam6d/Boctree.h"
+#include "scan_settings.h"
 
 #ifdef WITH_MMAP_SCAN
 #include "boost/filesystem.hpp"
@@ -18,6 +19,11 @@ public:
   BasicScan() {};
 
   static void openDirectory(const std::string& path, IOType type, int start, int end
+#ifdef WITH_MMAP_SCAN
+    , boost::filesystem::path cache = boost::filesystem::path()
+#endif
+  );
+  static void openDirectory(dataset_settings& ss
 #ifdef WITH_MMAP_SCAN
     , boost::filesystem::path cache = boost::filesystem::path()
 #endif
@@ -51,7 +57,7 @@ public:
 
   virtual size_t getFrameCount();
   virtual void getFrame(size_t i, const double*& pose_matrix, AlgoType& type);
-  
+
   //! Constructor for creation of Scans without openDirectory
   BasicScan(double * rPos, double * rPosTheta, std::vector<double*> points);
   //! Constructor for creation of Scans without openDirectory,
@@ -98,6 +104,15 @@ private:
     , boost::filesystem::path cache = boost::filesystem::path()
 #endif
   );
+  BasicScan(const dataset_settings& ss, std::string& identifier
+#ifdef WITH_MMAP_SCAN
+    , boost::filesystem::path cache = boost::filesystem::path()
+#endif
+  ) : BasicScan(ss.data_source, identifier, ss.format
+#ifdef WITH_MMAP_SCAN
+    , cache
+#endif
+  ) {}
 
   //! Initialization function
   void init();

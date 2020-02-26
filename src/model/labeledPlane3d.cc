@@ -12,6 +12,9 @@
 #include "model/labeledPlane3d.h"
 #include "model/util.h"
 
+#ifdef _MSC_VER
+#define  _USE_MATH_DEFINES
+#endif
 #include <math.h>
 
 #include <set>
@@ -140,7 +143,7 @@ void model::LabeledPlane3d::computeLines(std::vector<int>& verticalResult, std::
     cv::HoughLinesP(combined, lines, HOUGH_RHO, HOUGH_THETA, HOUGH_THRESH, HOUGH_MIN_LINE_LEN);
 
     // convert to color image so we can draw some colored lines on it
-    cv::cvtColor(combined, combined, CV_GRAY2BGR, 3);
+    cv::cvtColor(combined, combined, cv::COLOR_GRAY2BGR, 3);
     cv::Mat imgLines      = combined.clone();
     cv::Mat imgFinalLines = combined.clone();
 

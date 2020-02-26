@@ -1,5 +1,5 @@
 // to have M_PI defined on Windows
-#ifdef WIN32
+#ifdef _WIN32
 #define _USE_MATH_DEFINES
 #endif
 #include <cmath>
@@ -9,6 +9,18 @@
 #include <cstdio>
 #include <sstream>
 #include <iomanip>
+
+#if defined(__CYGWIN__) || defined(__MINGW32__)
+# ifndef M_PI
+#  define M_PI       3.14159265358979323846
+#  define M_PI_2     1.57079632679489661923
+#  define M_PI_4     0.78539816339744830962
+#  define M_1_PI     0.31830988618379067154
+#  define M_2_PI     0.63661977236758134308
+#  define M_SQRT2    1.41421356237309504880
+#  define M_SQRT1_2  0.70710678118654752440
+# endif
+#endif // __CYGWIN__
 
 enum Plane { XY, XZ, YZ };
 
@@ -90,21 +102,21 @@ int main()
 		std::tie (o_x, o_y, o_z) = o;
 		std::stringstream ss;
 		ss << "scan" << std::setfill('0') << std::setw(3) << scan_num << ".pose";
-		FILE* fnobox_pose = std::fopen(ss.str().c_str(), "w");
+		FILE* fnobox_pose = std::fopen(ss.str().c_str(), "wb");
 		std::fprintf(fnobox_pose, "%f %f %f\n0 0 0\n", -o_y, o_z, o_x);
 		std::fclose(fnobox_pose);
 		ss.str("");
 		ss << "scan" << std::setfill('0') << std::setw(3) << scan_num << ".3d";
-		FILE* fnobox = std::fopen(ss.str().c_str(), "w");
+		FILE* fnobox = std::fopen(ss.str().c_str(), "wb");
 		scan_num += 1;
 		ss.str("");
 		ss << "scan" << std::setfill('0') << std::setw(3) << scan_num << ".pose";
-		FILE* fbox_pose = std::fopen(ss.str().c_str(), "w");
+		FILE* fbox_pose = std::fopen(ss.str().c_str(), "wb");
 		std::fprintf(fbox_pose, "%f %f %f\n0 0 0\n", -o_y, o_z, o_x);
 		std::fclose(fbox_pose);
 		ss.str("");
 		ss << "scan" << std::setfill('0') << std::setw(3) << scan_num << ".3d";
-		FILE* fbox = std::fopen(ss.str().c_str(), "w");
+		FILE* fbox = std::fopen(ss.str().c_str(), "wb");
 		scan_num += 1;
 		for (int incl = 1; incl < 180; ++incl) {
 			double theta = incl/180.0*M_PI;
@@ -129,8 +141,19 @@ int main()
 						minz = z;
 					}
 				}
+				/*
+				 * Do not print the values as exact hexfloats because depending
+				 * on the glibc implementation of the trigonometric functions,
+				 * the last digit might be rounded differently. Compare for
+				 * example 2.27 with 2.28.
+				 *
+				 * We remove another digit because cygwin suffers from yet
+				 * another sort of imprecision...
+				 *
+				 * We remove another digit of precision to make MacOS happy...
+				 */
 				if (mindist != std::numeric_limits<double>::infinity()) {
-					std::fprintf(fnobox, "%a %a %a 0\n", -miny+o_y, minz-o_z, minx-o_x);
+					std::fprintf(fnobox, "%.10f %.10f %.10f 0\n", -miny+o_y, minz-o_z, minx-o_x);
 				}
 				for (auto p: box) {
 					double x, y, z;
@@ -143,7 +166,7 @@ int main()
 					}
 				}
 				if (mindist != std::numeric_limits<double>::infinity()) {
-					std::fprintf(fbox, "%a %a %a 0\n", -miny+o_y, minz-o_z, minx-o_x);
+					std::fprintf(fbox, "%.10f %.10f %.10f 0\n", -miny+o_y, minz-o_z, minx-o_x);
 				}
 			}
 		}

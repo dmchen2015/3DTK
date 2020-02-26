@@ -10,13 +10,13 @@
 #ifndef __SHOW_COMMON_H__
 #define __SHOW_COMMON_H__
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 #define  _USE_MATH_DEFINES
 #include <windows.h>
 #endif
 
 #ifdef WITH_GLEE
-#include "glee/GLee.h"
+#include "GLee.h"
 #endif
 
 #include "show/show_Boctree.h"
@@ -53,7 +53,7 @@
 
 
 #ifdef _MSC_VER
-#if !defined _OPENMP && defined OPENMP 
+#if !defined _OPENMP && defined OPENMP
 #define _OPENMP
 #endif
 #endif
@@ -160,11 +160,6 @@ extern GLfloat pzoom;
 extern GLfloat pzoom_old;
 
 /**
- * rotate zoom
- */
-extern GLfloat rzoom;
-
-/**
  * Mode of the fog (exp, exp2, linear)
  */
 extern GLint fogMode;
@@ -199,7 +194,7 @@ extern int show_poses;            // Show the coordinate axes of the poses ?
  */
 extern int cameraNavMouseMode;
 
-extern int mouseNavX, mouseNavY;
+extern double mouseNavX, mouseNavY;
 extern int mouseNavButton;
 extern int mousePresX, mousePresY;
 
@@ -215,17 +210,25 @@ extern bool keymap[256];
 /**
  * draw scans in different color during animation
  */
-extern bool coloranim;
+extern int coloranim;
 
 /**
  * hide the gui
  */
 extern bool nogui;
 
+extern bool hide_label;
+
+/**
+ * hide class label legend when using point coloring by type
+ */
+extern bool hide_classLabels;
+
 /**
  * take a screenshot and exit
  */
 extern bool takescreenshot;
+extern std::string screenshot_filename;
 
 /**
  * rendering a png is done in the background. If an animation is rendered,
@@ -301,6 +304,8 @@ extern double movementSpeed;
 extern double defaultZoom;
 extern GLfloat fogDensity;
 extern double voxelSize;
+extern GLfloat rzoom;
+
 
 extern float adaption_rate;
 extern float LevelOfDetail;
@@ -412,7 +417,7 @@ void reloadFrames();
 /**
  * Read scan files and initialize OpenGL.
  */
-void initShow(const dataset_settings& ds, const window_settings& ws);
+void initShow(dataset_settings& dss, const window_settings& ws, const display_settings& ds);
 
 void deinitShow();
 

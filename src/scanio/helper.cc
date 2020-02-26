@@ -7,12 +7,12 @@
 #include <zip.h>
 #endif
 
-bool ScanDataTransform_identity::transform(double xyz[3], unsigned char rgb[3], float*  refl, float* temp, float* ampl, int* type, float* devi)
+bool ScanDataTransform_identity::transform(double xyz[3], unsigned char rgb[3], float*  refl, float* temp, float* ampl, int* type, float* devi, double n[3])
 {
     return true;
 }
 
-bool ScanDataTransform_ks::transform(double xyz[3], unsigned char rgb[3], float*  refl, float* temp, float* ampl, int* type, float* devi)
+bool ScanDataTransform_ks::transform(double xyz[3], unsigned char rgb[3], float*  refl, float* temp, float* ampl, int* type, float* devi, double n[3])
 {
     double tmp;
 
@@ -34,7 +34,7 @@ bool ScanDataTransform_ks::transform(double xyz[3], unsigned char rgb[3], float*
     return true;
 }
 
-bool ScanDataTransform_riegl::transform(double xyz[3], unsigned char rgb[3], float*  refl, float* temp, float* ampl, int* type, float* devi)
+bool ScanDataTransform_riegl::transform(double xyz[3], unsigned char rgb[3], float*  refl, float* temp, float* ampl, int* type, float* devi, double n[3])
 {
     double tmp;
     tmp = xyz[2];
@@ -45,7 +45,7 @@ bool ScanDataTransform_riegl::transform(double xyz[3], unsigned char rgb[3], flo
     return true;
 }
 
-bool ScanDataTransform_rts::transform(double xyz[3], unsigned char rgb[3], float*  refl, float* temp, float* ampl, int* type, float* devi)
+bool ScanDataTransform_rts::transform(double xyz[3], unsigned char rgb[3], float*  refl, float* temp, float* ampl, int* type, float* devi, double n[3])
 {
     // check if TYPE_INVALID flag for rts invalid points is set
     if(*type & 0x10)
@@ -60,7 +60,7 @@ bool ScanDataTransform_rts::transform(double xyz[3], unsigned char rgb[3], float
     return true;
 }
 
-bool ScanDataTransform_xyz::transform(double xyz[3], unsigned char rgb[3], float*  refl, float* temp, float* ampl, int* type, float* devi)
+bool ScanDataTransform_xyz::transform(double xyz[3], unsigned char rgb[3], float*  refl, float* temp, float* ampl, int* type, float* devi, double n[3])
 {
     double tmp;
     tmp = xyz[2];
@@ -71,13 +71,25 @@ bool ScanDataTransform_xyz::transform(double xyz[3], unsigned char rgb[3], float
     return true;
 }
 
-bool ScanDataTransform_pts::transform(double xyz[3], unsigned char rgb[3], float*  refl, float* temp, float* ampl, int* type, float* devi)
+bool ScanDataTransform_pts::transform(double xyz[3], unsigned char rgb[3], float*  refl, float* temp, float* ampl, int* type, float* devi, double n[3])
 {
     xyz[0] = xyz[0];
     xyz[1] = xyz[1];
     xyz[2] = -1 * xyz[2];
 
     return true;
+}
+
+bool ScanDataTransform_combined::transform(double xyz[3], unsigned char rgb[3], float*  refl, float* temp, float* ampl, int* type, float* devi, double n[3])
+{
+  return m_sdt_1.transform(xyz, rgb, refl, temp, ampl, type, devi, n)
+    && m_sdt_2.transform(xyz, rgb, refl, temp, ampl, type, devi, n);
+}
+
+bool ScanDataTransform_matrix::transform(double xyz[3], unsigned char rgb[3], float*  refl, float* temp, float* ampl, int* type, float* devi, double n[3])
+{
+  transform3(m_matrix, xyz);
+  return true;
 }
 
 time_t lastModifiedHelper(const char *dir_path,
@@ -131,14 +143,66 @@ std::list<std::string> readDirectoryHelper(const char *dir_path,
     return identifiers;
 }
 
+std::list<std::string> readDirectoryHelper(dataset_settings& dss,
+  const char **data_path_suffixes,
+  const char *data_path_prefix,
+  unsigned int id_len)
+{
+  //return readDirectoryHelper(dss.data_source.c_str(), dss.scan_numbers.min, dss.scan_numbers.max, data_path_suffixes, data_path_prefix);
+  std::list<std::string> identifiers;
+  multi_range_set::iterator it = dss.scan_ranges.begin();
+  bool found = false;
+  int last_id = *it;
+  do {
+    for (; !it.clusterDone(); ++it) {
+      std::string identifier(to_string(*it, id_len));
+      // scan consists of data and pose files
+      found = false;
+      for (const char **s = data_path_suffixes; *s != 0; s++) {
+        boost::filesystem::path data(dss.data_source);
+        data /= boost::filesystem::path(std::string(data_path_prefix) + identifier + *s);
+        PointFilter filter;
+        /* pass the identity function because we don't want to read data
+         * from the file but just find out whether it exists or not */
+        if (open_path(data, [](std::istream &data_file) -> bool { return true; })) {
+          found = true;
+          break;
+        }
+      }
+      // stop if part of a scan is missing or end by absence is detected
+      if (!found) {
+        std::cerr << "No data found for " << data_path_prefix << identifier << "!" << std::endl;
+        it.reference()->setMaxLimit(last_id);
+        break;
+      }
+      else {
+        last_id = *it;
+      }
+    }
+    multi_range_set cluster = it.cluster();
+    if (cluster.isValid())
+    {
+      identifiers.push_back(cluster.toString(id_len));
+    }
+    it.nextCluster();
+  } while (!it.done());
+  return identifiers;
+}
+
 void readPoseHelper(const char *dir_path,
         const char *identifier,
         double *pose,
         const char *pose_path_suffix,
         const char *pose_path_prefix)
 {
+    std::string id_str(identifier);
+    multi_range<range<int> > mr;
+    mr.set(id_str);
+    mr.merged = true;
+    id_str = to_string(*(mr.begin()), 3).c_str();
+
     boost::filesystem::path pose_path(dir_path);
-    pose_path /= boost::filesystem::path(std::string(pose_path_prefix) + identifier +
+    pose_path /= boost::filesystem::path(std::string(pose_path_prefix) + id_str +
             pose_path_suffix);
 
 
@@ -178,7 +242,7 @@ void readPoseHelper(const char *dir_path,
 bool strtoval(char *pos, unsigned int linenr, double* ret)
 {
     char *endptr;
-    errno = 0;   
+    errno = 0;
     char *saved_locale;
     saved_locale = setlocale(LC_NUMERIC, "C");
     double val = strtod(pos, &endptr);
@@ -304,36 +368,36 @@ bool strtoval(char *pos, unsigned int linenr, int* ret)
     return true;
 }
 
-unsigned int strtoarray(std::string opt_s, char **&opts_array)
+unsigned int strtoarray(std::string opt_s, char **&opts_array,const char * separator)
 {
     char * opts = (char *)malloc(opt_s.size() + 1);
     memcpy(opts, opt_s.c_str(), opt_s.size() + 1);
     char * tmp = (char *)malloc(opt_s.size() + 1);
     memcpy(tmp, opt_s.c_str(), opt_s.size() + 1);
-    
+
     char * pch;
-    pch = strtok (opts," ");
+    pch = strtok (opts,separator);
 
     int count = 0;
     while (pch != NULL)
     {
       count++;
-      pch = strtok (NULL, " ");
+      pch = strtok (NULL, separator);
     }
     opts_array = new char*[count + 1];
-    pch = strtok (tmp," ");
+    pch = strtok (tmp,separator);
     int cnt = 0;
     while (pch != NULL && cnt < count)
     {
       cnt++;
       opts_array[cnt] = new char[strlen(pch) + 1];
       memcpy(opts_array[cnt], pch, strlen(pch) + 1);
-      pch = strtok (NULL, " ");
+      pch = strtok (NULL, separator);
     }
-    return count; 
+    return count;
 }
 
-bool storeval(char *pos, unsigned int linenr, IODataType currspec, double* xyz, int* xyz_idx, unsigned char* rgb, int* rgb_idx, float* refl, float* temp, float* ampl, int* type, float* devi)
+bool storeval(char *pos, unsigned int linenr, IODataType currspec, double* xyz, int* xyz_idx, unsigned char* rgb, int* rgb_idx, float* refl, float* temp, float* ampl, int* type, float* devi, double* n, int* n_idx)
 {
     switch (currspec) {
         case DATA_XYZ:
@@ -343,13 +407,15 @@ bool storeval(char *pos, unsigned int linenr, IODataType currspec, double* xyz, 
         case DATA_REFLECTANCE:
             return strtoval(pos, linenr, refl);
         case DATA_TEMPERATURE:
-            return strtoval(pos, linenr, devi);
+            return strtoval(pos, linenr, temp);
         case DATA_AMPLITUDE:
             return strtoval(pos, linenr, ampl);
         case DATA_TYPE:
             return strtoval(pos, linenr, type);
         case DATA_DEVIATION:
             return strtoval(pos, linenr, devi);
+        case DATA_NORMAL:
+            return strtoval(pos, linenr, &n[(*n_idx)++]);
         case DATA_DUMMY:
             return true;
         case DATA_TERMINATOR:
@@ -361,7 +427,7 @@ bool storeval(char *pos, unsigned int linenr, IODataType currspec, double* xyz, 
     }
 }
 
-bool checkSpec(IODataType* spec, std::vector<double>* xyz, std::vector<unsigned char>* rgb, std::vector<float>* refl, std::vector<float>* temp, std::vector<float>* ampl, std::vector<int>* type, std::vector<float>* devi)
+bool checkSpec(IODataType* spec, std::vector<double>* xyz, std::vector<unsigned char>* rgb, std::vector<float>* refl, std::vector<float>* temp, std::vector<float>* ampl, std::vector<int>* type, std::vector<float>* devi, std::vector<double>* n)
 {
     int count = 0;
     int xyzcount = 0;
@@ -371,8 +437,9 @@ bool checkSpec(IODataType* spec, std::vector<double>* xyz, std::vector<unsigned 
     int amplcount = 0;
     int typecount = 0;
     int devicount = 0;
+    int normalcount = 0;
     IODataType *currspec;
-    // go through the spec array and count the occurrence of each spec 
+    // go through the spec array and count the occurrence of each spec
     for (currspec = spec; *currspec != DATA_TERMINATOR; ++currspec) {
         switch (*currspec) {
             case DATA_XYZ:
@@ -402,6 +469,9 @@ bool checkSpec(IODataType* spec, std::vector<double>* xyz, std::vector<unsigned 
             case DATA_DEVIATION:
                 devicount++;
                 count++;
+                break;
+            case DATA_NORMAL:
+                normalcount++;
                 break;
             case DATA_DUMMY:
                 break;
@@ -471,6 +541,14 @@ bool checkSpec(IODataType* spec, std::vector<double>* xyz, std::vector<unsigned 
         std::cerr << "you gave a deviation vector, so you must supply exactly one deviation spec" << std::endl;
         return false;
     }
+    if (n == 0 && normalcount != 0) {
+        std::cerr << "you gave a normal spec but no normal vector" << std::endl;
+        return false;
+    }
+    if (n != 0 && normalcount != 3) {
+        std::cerr << "you gave a normal vector, so you must supply exactly three normal specs" << std::endl;
+        return false;
+    }
     return true;
 }
 
@@ -488,10 +566,10 @@ std::function<bool (std::istream &data_file)> open_uos_file(
         std::vector<double>* xyz, std::vector<unsigned char>* rgb,
         std::vector<float>* reflectance, std::vector<float>* temperature,
         std::vector<float>* amplitude, std::vector<int>* type,
-        std::vector<float>* deviation)
+        std::vector<float>* deviation, std::vector<double>* normal)
 {
     return [=,&filter,&transform](std::istream &data_file) -> bool {
-        return readASCII(data_file, spec, transform, filter, xyz, rgb, reflectance, temperature, amplitude, type, deviation);
+    return readASCII(data_file, spec, transform, filter, xyz, rgb, reflectance, temperature, amplitude, type, deviation, normal);
     };
 }
 
@@ -504,15 +582,17 @@ bool handle_line(char *pos, std::streamsize linelen, unsigned int linenr, IOData
 ScanDataTransform& transform, PointFilter& filter, std::vector<double>* xyz, std::vector<unsigned
         char>* rgb, std::vector<float>* refl, std::vector<float>* temp,
         std::vector<float>* ampl, std::vector<int>* type, std::vector<float>*
-        devi)
+        devi, std::vector<double>* n)
 {
     // temporary storage areas
     double xyz_tmp[3];
     unsigned char rgb_tmp[3];
+    double n_tmp[3];
     float refl_tmp, temp_tmp, ampl_tmp, devi_tmp;
     int type_tmp;
     int xyz_idx = 0;
     int rgb_idx = 0;
+    int n_idx   = 0;
 
     // skip over leading whitespace
     for (; isblank(*pos); ++pos, --linelen);
@@ -533,7 +613,7 @@ ScanDataTransform& transform, PointFilter& filter, std::vector<double>* xyz, std
         // we found the end of a field so lets read its content
         *cur = '\0';
         if (!storeval(pos, linenr, *currspec, xyz_tmp, &xyz_idx, rgb_tmp,
-                    &rgb_idx, &refl_tmp, &temp_tmp, &ampl_tmp, &type_tmp, &devi_tmp))
+                    &rgb_idx, &refl_tmp, &temp_tmp, &ampl_tmp, &type_tmp, &devi_tmp, n_tmp, &n_idx))
             return false;
         currspec++;
         // read in the remaining whitespace
@@ -546,7 +626,7 @@ ScanDataTransform& transform, PointFilter& filter, std::vector<double>* xyz, std
         *cur = '\0';
         // read in the last value
         if (!storeval(pos, linenr, *currspec, xyz_tmp, &xyz_idx, rgb_tmp,
-                    &rgb_idx, &refl_tmp, &temp_tmp, &ampl_tmp, &type_tmp, &devi_tmp))
+                    &rgb_idx, &refl_tmp, &temp_tmp, &ampl_tmp, &type_tmp, &devi_tmp, n_tmp, &n_idx))
             return false;
         // check if more values were expected
         currspec++;
@@ -555,13 +635,17 @@ ScanDataTransform& transform, PointFilter& filter, std::vector<double>* xyz, std
         std::cerr << "less values than in spec in line " << linenr << std::endl;
         return false;
     }
-    // check if three values were read in for xyz and rgb 
+    // check if three values were read in for xyz and rgb
     if (xyz != 0 && xyz_idx != 3) {
         std::cerr << "can't understand " << xyz_idx << " coordinate values in line " << linenr << std::endl;
         return false;
     }
     if (rgb != 0 && rgb_idx != 3) {
-        std::cerr << "can't understand " << xyz_idx << " color values in line " << linenr << std::endl;
+        std::cerr << "can't understand " << rgb_idx << " color values in line " << linenr << std::endl;
+        return false;
+    }
+    if (n != 0 && n_idx != 3) {
+        std::cerr << "can't understand " << n_idx << " normal values in line " << linenr << std::endl;
         return false;
     }
     // apply transformations and filter data and append to vectors
@@ -575,7 +659,7 @@ ScanDataTransform& transform, PointFilter& filter, std::vector<double>* xyz, std
     //
     // FIXME: instead of using a different datastructure, another idea would
     //        be to use mmap-ed file(s) with the respective data inside
-    if (transform.transform(xyz_tmp, rgb_tmp, &refl_tmp, &temp_tmp, &ampl_tmp, &type_tmp, &devi_tmp)
+    if (transform.transform(xyz_tmp, rgb_tmp, &refl_tmp, &temp_tmp, &ampl_tmp, &type_tmp, &devi_tmp, n_tmp)
             && (xyz == 0 || filter.check(xyz_tmp)) ) {
             if (xyz != 0)
                 for (int i = 0; i < 3; ++i) {
@@ -630,6 +714,15 @@ ScanDataTransform& transform, PointFilter& filter, std::vector<double>* xyz, std
                     std::cerr << "handle_line: Cannot add element to devi vector with " << devi->size() << " elements." << std::endl;
                     throw;
                 }
+            if (n != 0)
+                for (int i = 0; i < 3; ++i) {
+                    try {
+                        n->push_back(n_tmp[i]);
+                    } catch (std::bad_alloc& ba){
+                        std::cerr << "handle_line: Cannot add element to n vector with " << n->size() << " elements." << std::endl;
+                        throw;
+                    }
+                }
     }
 
     return true;
@@ -639,7 +732,7 @@ bool readASCII(std::istream& infile, IODataType* spec, ScanDataTransform& transf
         PointFilter& filter, std::vector<double>* xyz, std::vector<unsigned
         char>* rgb, std::vector<float>* refl, std::vector<float>* temp,
         std::vector<float>* ampl, std::vector<int>* type, std::vector<float>*
-        devi, std::streamsize bufsize)
+        devi, std::vector<double>* n, std::streamsize bufsize)
 {
     /*
      * there seems to be no sane and fast way to read a file with multiple
@@ -677,7 +770,7 @@ bool readASCII(std::istream& infile, IODataType* spec, ScanDataTransform& transf
     // istream::getline to read a line (it supports a byte limit)
     // we then check whether the last character is a \r and remove it
 
-    if (!checkSpec(spec, xyz, rgb, refl, temp, ampl, type, devi)) {
+    if (!checkSpec(spec, xyz, rgb, refl, temp, ampl, type, devi, n)) {
         std::cerr << "problems with spec" << std::endl;
         goto fail;
     }
@@ -715,7 +808,7 @@ bool readASCII(std::istream& infile, IODataType* spec, ScanDataTransform& transf
             linelen--;
         }
 
-        if (!handle_line(buffer, linelen, linenr, spec, transform, filter, xyz, rgb, refl, temp, ampl, type, devi)) {
+        if (!handle_line(buffer, linelen, linenr, spec, transform, filter, xyz, rgb, refl, temp, ampl, type, devi, n)) {
             std::cerr << "unable to parse line " << linenr << std::endl;
             // A line contained an error, so we decrement the header variable
             header -= 1;

@@ -1,20 +1,24 @@
 all: .configured
-	cmake --build .build
+	cmake --build .build --config RelWithDebInfo -- $(filter -j%,$(MAKEFLAGS))
 
 .PHONY: test
 test:
 	cmake -H. -B.build
-	CTEST_OUTPUT_ON_FAILURE=true cmake --build .build --target test
+	CTEST_OUTPUT_ON_FAILURE=true cmake --build .build --target test --config RelWithDebInfo
 
 config: .build
-	ccmake -H. -B.build
+ifeq ($(CMAKE_GENERATOR),Ninja)
+	ccmake -H. -B.build -DCMAKE_BUILD_TYPE=RelWithDebInfo -G "Ninja"
+else
+	ccmake -H. -B.build -DCMAKE_BUILD_TYPE=RelWithDebInfo -G "Unix Makefiles"
+endif
 	touch .configured
 
 .configured: .build
 ifeq ($(CMAKE_GENERATOR),Ninja)
-	cmake -H. -B.build -G "Ninja"
+	cmake -H. -B.build -DCMAKE_BUILD_TYPE=RelWithDebInfo -G "Ninja"
 else
-	cmake -H. -B.build -G "Unix Makefiles"
+	cmake -H. -B.build -DCMAKE_BUILD_TYPE=RelWithDebInfo -G "Unix Makefiles"
 endif
 	touch .configured
 
@@ -22,7 +26,7 @@ endif
 	mkdir -p .build
 
 clean: .build
-	cmake --build .build --target clean
+	cmake --build .build --target clean --config RelWithDebInfo
 	-rm -rf .build
 	rm -f .configured
 

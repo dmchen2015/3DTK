@@ -28,6 +28,10 @@ if(WITH_ROS)
   include_directories(${CATKIN_DEVEL_PREFIX}/include)
   include_directories(${catkin_INCLUDE_DIRS})
 
+  # only necessary until this catkin fix propagated into Debian Buster:
+  # https://salsa.debian.org/science-team/ros-catkin/commit/68154962414a4c7dfcedce0cd183135cd71a33c8
+  include_directories(${EIGEN3_INCLUDE_DIR} ${PCL_INCLUDE_DIRS})
+
   pkg_check_modules(OROCOS_BFL REQUIRED orocos-bfl)
   include_directories(${OROCOS_BFL_INCLUDE_DIRS})
   link_directories(${OROCOS_BFL_LIBRARY_DIRS})
@@ -37,7 +41,7 @@ if(WITH_ROS)
 
   if(WITH_RIVLIB)
   add_executable(bag2scan bag2scan.cc calibration.cc importer.cc ekf_filter.cc powell.cc nrutil.cc my_robot_pose_ekf/odom_estimation.cpp my_robot_pose_ekf/nonlinearanalyticconditionalgaussianodo.cpp odometry.cc)
-  target_link_libraries(bag2scan scan_shared ${catkin_LIBRARIES} ${RiVLib_SCANLIB_LIBRARY} ${OROCOS_BFL_LIBRARIES})
+  target_link_libraries(bag2scan scan ${catkin_LIBRARIES} ${RiVLib_SCANLIB_LIBRARY} ${OROCOS_BFL_LIBRARIES})
   add_dependencies(bag2scan riegl_generate_messages_cpp)
   add_dependencies(bag2scan volksbotRT_generate_messages_cpp)
   endif()
@@ -45,15 +49,15 @@ if(WITH_ROS)
   add_executable(cartographer2scan cartographer2scan.cc)
   target_link_libraries(cartographer2scan ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
-  add_library(tdtkroswrapper STATIC
+  add_library(tdtkroswrapper
     tdtkroswrapper.cc
     #slam6Dwrapper.cc
     icp6Dwrapper.cc
   )
-  target_link_libraries(tdtkroswrapper scan_shared ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+  target_link_libraries(tdtkroswrapper scan ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
   add_executable(scan2bag scan2bag.cc)
-  target_link_libraries(scan2bag ${catkin_LIBRARIES} ${PCL_LIBRARIES} scan_shared tdtkroswrapper)
+  target_link_libraries(scan2bag ${catkin_LIBRARIES} ${PCL_LIBRARIES} scan tdtkroswrapper)
 
   #add_executable(slam6D_node slam6D_node.cc)
   #target_link_libraries(slam6D_node ${catkin_LIBRARIES} tdtkroswrapper)

@@ -24,11 +24,9 @@ class importer;
  */
 class ScanIO_rxp : public ScanIO {
 public:
-  virtual std::list<std::string> readDirectory(const char* dir_path, unsigned int start, unsigned int end);
   virtual void readPose(const char* dir_path, const char* identifier, double* pose);
-  virtual time_t lastModified(const char* dir_path, const char* identifier);
-  virtual void readScan(const char* dir_path, const char* identifier, PointFilter& filter, std::vector<double>* xyz, std::vector<unsigned char>* rgb, std::vector<float>* reflectance, std::vector<float>* temperature, std::vector<float>* amplitude, std::vector<int>* type, std::vector<float>* deviation);
-  virtual bool supports(IODataType type);
+  virtual void readScan(const char* dir_path, const char* identifier, PointFilter& filter, std::vector<double>* xyz, std::vector<unsigned char>* rgb, std::vector<float>* reflectance, std::vector<float>* temperature, std::vector<float>* amplitude, std::vector<int>* type, std::vector<float>* deviation,
+      std::vector<double>* normal);
 
   ScanIO_rxp() : dec(0), imp(0) {}
 private:
@@ -40,6 +38,14 @@ private:
   decoder_rxpmarker *dec;
   importer *imp;
   std::string old_path;
+
+
+protected:
+  static const char* data_suffix;
+  static IODataType spec[];
+
+  virtual const char* dataSuffix() { return data_suffix; }
+  virtual IODataType* getSpec() { return spec; }
 };
 
 /**
@@ -81,6 +87,7 @@ protected:
     scanlib::basic_packets::on_frame_stop(arg);
     currentscan++;
   }
+
 };
 
 #endif

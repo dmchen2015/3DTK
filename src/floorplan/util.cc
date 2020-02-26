@@ -13,7 +13,13 @@
 
 // C includes.
 #include <sys/stat.h>       // stat()
+#ifdef _WIN32
+#include "dirent.h"
+#include <direct.h>
+#define mkdir(path,mode) _mkdir (path)
+#else
 #include <unistd.h>
+#endif
 #include <math.h>
 
 #include <stdexcept>

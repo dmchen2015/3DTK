@@ -1,6 +1,6 @@
 /**
  * @file
- * @brief 
+ * @brief
  *
  * @author Thomas Escher
  */
@@ -11,6 +11,9 @@
 #include <vector>
 #include <string>
 
+#if defined(_WINDEF_) && defined(__CYGWIN__)
+#error boost-interprocess is incompatible with windef.h on cygwin
+#endif
 // segment manager, allocators, pointers, ...
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
@@ -41,7 +44,7 @@ public:
    * A CacheManager owned shared memory will be opened to create the CO contents in.
    */
   CacheManager(SegmentManager* sm, const char* shm_name, std::size_t cache_size);
-  
+
   /**
    * Deletes all CacheObjects and closes the shared memory.
    */
@@ -66,7 +69,7 @@ public:
     * @throws when no memory could be allocated because removing all remaining (non read-locked) CacheObjects removed didn't free enough memory.
     */
   unsigned char* allocateCacheObject(CacheObject* obj, unsigned int size);
-  
+
   /**
    * Invalidate a CacheObject and its handler.
    */

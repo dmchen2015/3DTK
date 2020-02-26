@@ -2,7 +2,7 @@
  * @file scan_io_uosr.h
  * @brief IO of a 3D scan in xyz file format plus an intensity
 
- * @author Dorit Borrmann 
+ * @author Dorit Borrmann
  */
 
 #ifndef __SCAN_IO_XYZ_H__
@@ -10,33 +10,18 @@
 
 #include "scan_io.h"
 
-
-
 /**
- * @brief IO of a 3D scan in uos file format 
+ * @brief IO of a 3D scan in uos file format
  *
  * The compiled class is available as shared object file
  */
 class ScanIO_xyz : public ScanIO {
-public:
-  virtual std::list<std::string> readDirectory(const char* dir_path, 
-					       unsigned int start, 
-					       unsigned int end);
-  virtual void readPose(const char* dir_path, 
-			const char* identifier, 
-			double* pose);
-  virtual time_t lastModified(const char* dir_path, const char* identifier);
-  virtual void readScan(const char* dir_path, 
-			const char* identifier, 
-			PointFilter& filter, 
-			std::vector<double>* xyz, 
-			std::vector<unsigned char>* rgb, 
-			std::vector<float>* reflectance, 
-			std::vector<float>* temperature, 
-			std::vector<float>* amplitude, 
-			std::vector<int>* type, 
-			std::vector<float>* deviation);
-  virtual bool supports(IODataType type);
+protected:
+  static const char* data_suffix;
+  static ScanDataTransform& transform2uos;
+
+  virtual const char* dataSuffix() { return data_suffix; }
+  virtual ScanDataTransform& getTransform() { return transform2uos; }
 };
 
 #endif

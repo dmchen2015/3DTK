@@ -44,10 +44,7 @@ using namespace std;
 #include <boost/filesystem/fstream.hpp>
 using namespace boost::filesystem;
 
-#define DATA_PATH_PREFIX "scan"
-#define DATA_PATH_SUFFIX ".bin"
-#define POSE_PATH_PREFIX "scan"
-#define POSE_PATH_SUFFIX ".pose"
+const char* ScanIO_velodyne::data_suffix = ".bin";
 
 #define BLOCK_OFFSET 42+16
 
@@ -84,7 +81,7 @@ double velodyne_calibrated[VELODYNE_NUM_LASERS][6];
  */
 int backup()
 {
-	double velodyne_calibrated1[64][6] = 
+	double velodyne_calibrated1[64][6] =
 	{
 		{	-7.1581192,	-4.5,	102,	21.560343,	-2.5999999, 1},
 		{	-6.8178215,	-3.4000001,	125,	21.516994,	2.5999999, 1},
@@ -262,7 +259,7 @@ int calibrate(string filename)
 	string line;
 	std::ifstream myfile (filename.c_str());
 	if (myfile.is_open())
-	{	
+	{
 		cout << "Using Calibration File"<<endl;
 		string data[6];
 		getline (myfile,line);
@@ -291,7 +288,7 @@ int calibrate(string filename)
 			j++;
 		}
 		while(!myfile.eof());
-		
+
 		myfile.close();
 
 		if (linecount < 60)
@@ -361,15 +358,15 @@ int read_one_packet (
 
 	for ( c = 0 ; c < CIRCLELENGTH; c++ )
 	{
-#ifdef _MSC_VER 
+#ifdef _MSC_VER
 		fseek(fp , BLOCK_OFFSET, SEEK_CUR);
 #else
 #ifdef __CYGWIN__
 		fseek(fp , BLOCK_OFFSET, SEEK_CUR);
-#else		
+#else
 		fseeko(fp , BLOCK_OFFSET, SEEK_CUR);
 #endif
-#endif		
+#endif
 		size=fread ( buf, 1, BLOCK_SIZE, fp );
 
 		if(size<BLOCK_SIZE)
@@ -484,10 +481,10 @@ std::list<std::string> ScanIO_velodyne::readDirectory(const char* dir_path, unsi
 	   std::string identifier(to_string(i,3));
 
 	   path data(dir_path);
-	   data /= path(std::string(DATA_PATH_PREFIX) + DATA_PATH_SUFFIX);
+	   data /= path(std::string(dataPrefix()) + dataSuffix());
 
 	   path pose(dir_path);
-	   pose /= path(std::string(POSE_PATH_PREFIX) + identifier + POSE_PATH_SUFFIX);
+	   pose /= path(std::string(posePrefix()) + identifier + poseSuffix());
 
 	   if(!exists(data))
 		   break;
@@ -506,17 +503,6 @@ void ScanIO_velodyne::readPose(const char* dir_path, const char* identifier, dou
    return;
 }
 
-time_t ScanIO_velodyne::lastModified(const char* dir_path, const char* identifier)
-{
-  const char* suffixes[2] = { DATA_PATH_SUFFIX, NULL };
-  return lastModifiedHelper(dir_path, identifier, suffixes);
-}
-
-bool ScanIO_velodyne::supports(IODataType type)
-{
-  return !!(type & (DATA_XYZ));
-}
-
 
 void ScanIO_velodyne::readScan(
     const char* dir_path,
@@ -528,24 +514,25 @@ void ScanIO_velodyne::readScan(
     std::vector<float>* temperature,
     std::vector<float>* amplitude,
     std::vector<int>* type,
-    std::vector<float>* deviation)
+    std::vector<float>* deviation,
+    std::vector<double>* normal)
 {
     FILE *scan_in;
 
     path data_path(dir_path);
-    data_path /= path(std::string(DATA_PATH_PREFIX) +  DATA_PATH_SUFFIX);
+    data_path /= path(std::string(dataPrefix()) + dataSuffix());
     if(!exists(data_path))
         throw std::runtime_error(std::string("There is no scan file for [") + identifier + "] in [" + dir_path + "]");
 
 	char filename[256];
-	sprintf(filename, "%s%s%s",dir_path ,DATA_PATH_PREFIX,  DATA_PATH_SUFFIX );
+	sprintf(filename, "%s%s%s",dir_path , dataPrefix(), dataSuffix());
 
-#ifdef _MSC_VER 
+#ifdef _MSC_VER
     scan_in = fopen(filename,"rb");
 #else
 #ifdef __CYGWIN__
     scan_in = fopen(filename,"rb");
-#else    
+#else
     scan_in = fopen64(filename,"rb");
 #endif
 #endif
@@ -565,17 +552,17 @@ void ScanIO_velodyne::readScan(
 
 	fileCounter=  atoi(identifier);
 
-#ifdef _MSC_VER 
+#ifdef _MSC_VER
     fseek(scan_in, 24, SEEK_SET);
     fseek(scan_in, (BLOCK_SIZE+BLOCK_OFFSET)*CIRCLELENGTH*fileCounter, SEEK_CUR);
 #else
-#ifdef __CYGWIN__     
+#ifdef __CYGWIN__
     fseek(scan_in, 24, SEEK_SET);
     fseek(scan_in, (BLOCK_SIZE+BLOCK_OFFSET)*CIRCLELENGTH*fileCounter, SEEK_CUR);
 #else
     fseeko(scan_in, 24, SEEK_SET);
     fseeko(scan_in, (BLOCK_SIZE+BLOCK_OFFSET)*CIRCLELENGTH*fileCounter, SEEK_CUR);
-#endif    
+#endif
 #endif
 
     read_one_packet(
