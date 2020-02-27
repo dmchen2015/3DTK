@@ -37,7 +37,7 @@ matrix:
         - DERIV=debian DIST=sid CC=clang
   include:
     - os: osx
-      osx_image: xcode10.3
+      osx_image: xcode11.3
       before_cache:
         - brew cleanup
       cache:
